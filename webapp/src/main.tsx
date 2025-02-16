@@ -1,0 +1,21 @@
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import './index.css'
+import Home from './pages/index.tsx'
+import About from './pages/about.tsx'
+import Brands from './pages/brands.tsx'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <BrowserRouter>
+      <Routes>
+        <Route index element={<Home />} />
+        <Route path="/about" element={<About />} />
+        <Route path="/brands" element={<Brands />} />
+      </Routes>
+    </BrowserRouter>
+  </StrictMode>,
+)
+
+
