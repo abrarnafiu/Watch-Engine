@@ -6,6 +6,7 @@ export default function Navbar() {
         <a href="/" style={styles.buttons}><li>Home</li></a>
         <a href="/about" style={styles.buttons}><li>About</li></a>
         <a href="/brands" style={styles.buttons}><li>Brands</li></a>
+        <a href="/login" style={styles.buttons}><li>Login</li></a>
       </ul>
     </div>
   )
