@@ -2,11 +2,10 @@ export default function Navbar() {
   return (
     <div style={styles.navbar}>
       <ul style={styles.buttonsContainer}>
-        <a href="/" style={styles.buttons}><li>Logo</li></a>
-        <a href="/" style={styles.buttons}><li>Home</li></a>
+        <a href="/" style={styles.buttons}><li><img src="C:\Users\Habibur\Downloads\Watch Project\webapp\src\assets\logo-placeholder-image.png"></img></li></a>
         <a href="/about" style={styles.buttons}><li>About</li></a>
         <a href="/brands" style={styles.buttons}><li>Brands</li></a>
-        <a href="/login" style={styles.buttons}><li>Login</li></a>
+        <a href="/profile" style={styles.buttons}><li>Profile</li></a>
       </ul>
     </div>
   )
