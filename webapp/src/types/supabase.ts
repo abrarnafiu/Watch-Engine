@@ -8,8 +8,10 @@ export interface WatchPreferences {
   preferred_materials: string[];
   preferred_complications: string[];
   dial_colors: string[];
-  case_sizes: number[];
-  bio?: string;
+  case_sizes: string[];
+  bio: string;
+  name: string;
+  profile_image: string | null;
   created_at?: string;
   updated_at?: string;
 } 
