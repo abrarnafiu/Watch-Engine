@@ -20,6 +20,7 @@ export default function Profile() {
     preferred_complications: [],
     dial_colors: [],
     case_sizes: [],
+    bio: '',
   });
 
   // Predefined options for selections
@@ -106,11 +107,27 @@ export default function Profile() {
       <Navbar />
       <Content>
         <Header>
-          <Title>Watch Preferences</Title>
+          <Title>Profile</Title>
           <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
         </Header>
 
         {error && <ErrorMessage>{error}</ErrorMessage>}
+
+        <ProfileSection>
+          <SectionTitle>About Me</SectionTitle>
+          <BioTextarea
+            value={preferences.bio || ''}
+            onChange={(e) => setPreferences(prev => ({
+              ...prev,
+              bio: e.target.value
+            }))}
+            placeholder="Tell us about yourself..."
+            rows={4}
+          />
+          <SaveButton onClick={updateProfile} disabled={loading}>
+            {loading ? 'Saving...' : 'Save Bio'}
+          </SaveButton>
+        </ProfileSection>
 
         <PreferencesForm>
           <Section>
@@ -390,4 +407,27 @@ const CheckboxContainer = styled.div`
   label {
     cursor: pointer;
   }
+`;
+
+const BioTextarea = styled.textarea`
+  width: 100%;
+  padding: 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  resize: vertical;
+  min-height: 100px;
+
+  &:focus {
+    outline: none;
+    border-color: #007bff;
+  }
+`;
+
+const ProfileSection = styled.div`
+  background: white;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  margin-bottom: 2rem;
 `; 

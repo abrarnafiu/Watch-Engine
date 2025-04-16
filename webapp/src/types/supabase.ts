@@ -9,6 +9,7 @@ export interface WatchPreferences {
   preferred_complications: string[];
   dial_colors: string[];
   case_sizes: number[];
+  bio?: string;
   created_at?: string;
   updated_at?: string;
 } 
