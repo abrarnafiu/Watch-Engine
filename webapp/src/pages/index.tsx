@@ -45,14 +45,15 @@ export default function Home() {
       });
 
       if (!openAIResponse.ok) {
-        throw new Error(`API error: ${openAIResponse.status}`);
+        const errorData = await openAIResponse.json();
+        throw new Error(errorData.error || `API error: ${openAIResponse.status}`);
       }
 
       const analysis = await openAIResponse.json();
       console.log('Analysis:', analysis);
 
-      // Temporarily comment out the watch search until we get the analysis working
-      /*const watchResponse = await fetch('http://localhost:5000/api/search-watches', {
+      // Call the watch search API with the analysis
+      const watchResponse = await fetch('http://localhost:5000/api/search-watches', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -60,11 +61,34 @@ export default function Home() {
         body: JSON.stringify(analysis),
       });
 
-      const matchedWatches = await watchResponse.json();
-      setWatches(matchedWatches);*/
-    } catch (err) {
-      setError('Failed to search watches. Please try again.');
+      if (!watchResponse.ok) {
+        const errorData = await watchResponse.json();
+        throw new Error(errorData.error || `Watch search API error: ${watchResponse.status}`);
+      }
+
+      const data = await watchResponse.json();
+      console.log('Watch search results:', data);
+      
+      // Extract watches from the response
+      const matchedWatches = data.watches || [];
+      setWatches(matchedWatches);
+      
+      // If no watches were found, show a message
+      if (matchedWatches.length === 0) {
+        setError('No watches found matching your criteria. Try a different search.');
+      }
+    } catch (err: any) {
       console.error('Search error:', err);
+      setWatches([]);
+      
+      // Handle specific error cases
+      if (err.message.includes('API key is invalid')) {
+        setError('The watch search service is currently unavailable. Please try again later.');
+      } else if (err.message.includes('Failed to search for watches')) {
+        setError('Unable to search for watches at the moment. Please try again later.');
+      } else {
+        setError(`Failed to search watches: ${err.message}`);
+      }
     } finally {
       setLoading(false);
     }
