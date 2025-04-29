@@ -1,4 +1,4 @@
-import { supabase } from './webapp/src/lib/supabaseClient.js';
+import { supabase } from '../webapp/src/lib/supabaseClient.js';
 import axios from 'axios';
 
 // API request options

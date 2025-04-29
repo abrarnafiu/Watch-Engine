@@ -15,6 +15,7 @@ export default async function handler(
 
   try {
     const { query, schema } = req.body;
+    console.log('API received query:', query);
 
     if (!query) {
       return res.status(400).json({ error: 'Query is required' });
@@ -53,6 +54,7 @@ export default async function handler(
     });
 
     const criteria = JSON.parse(completion.choices[0].message.content || '{}');
+    console.log('API returning criteria:', criteria);
     return res.status(200).json(criteria);
   } catch (error) {
     console.error('Error analyzing query:', error);

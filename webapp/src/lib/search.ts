@@ -1,5 +1,26 @@
 import { supabase } from './supabaseClient';
-import { analyzeQuery } from '../api/analyze-query';
+
+// Utility function to call the analyze-query API endpoint
+async function analyzeQuery(query: string, schema: any) {
+  try {
+    const response = await fetch('/api/analyze-query', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ query, schema }),
+    });
+    
+    if (!response.ok) {
+      throw new Error(`API call failed: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('Error calling analyze-query API:', error);
+    throw error;
+  }
+}
 
 export interface SearchResult {
   id: string;

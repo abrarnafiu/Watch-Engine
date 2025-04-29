@@ -66,6 +66,8 @@ export default function Home() {
 
   const analyzeQuery = async (userQuery: string): Promise<SearchCriteria> => {
     try {
+      console.log('Analyzing query:', userQuery);
+      
       const response = await fetch(`${API_URL}/api/analyze-query`, {
         method: 'POST',
         headers: {
@@ -94,17 +96,68 @@ export default function Home() {
 
       const result = await response.json();
       
-      if (!result.success) {
-        console.error('Analyze query error:', result.message);
-        throw new Error(`Failed to analyze query: ${result.message}`);
-      }
+      // The API returns the criteria directly as a JSON object
+      console.log('API response:', result);
       
-      // Extract dial color from the response if available
+      // Check if the response has a data property
+      const responseData = result.data || result;
+      console.log('Response data to process:', responseData);
+      
+      // Map the API response to our SearchCriteria interface
       const criteria: SearchCriteria = {};
-      if (result.data && result.data['Dial Color']) {
-        criteria.dial_color = result.data['Dial Color'];
+      
+      // Map Type to model_name
+      if (responseData.Type) {
+        console.log('Found Type:', responseData.Type);
+        criteria.model_name = responseData.Type;
       }
       
+      // Map Dial Color to dial_color
+      if (responseData['Dial Color']) {
+        console.log('Found Dial Color:', responseData['Dial Color']);
+        criteria.dial_color = responseData['Dial Color'];
+      }
+      
+      // Map Price to price_eur_max
+      if (responseData.Price) {
+        console.log('Found Price:', responseData.Price);
+        const priceStr = responseData.Price.toString().toLowerCase();
+        if (priceStr.includes('under') || priceStr.includes('less than')) {
+          const priceValue = parseInt(priceStr.replace(/[^0-9]/g, ''));
+          if (!isNaN(priceValue)) {
+            console.log('Setting price_eur_max to:', priceValue);
+            criteria.price_eur_max = priceValue;
+          }
+        } else if (priceStr.includes('over') || priceStr.includes('more than')) {
+          const priceValue = parseInt(priceStr.replace(/[^0-9]/g, ''));
+          if (!isNaN(priceValue)) {
+            console.log('Setting price_eur_min to:', priceValue);
+            criteria.price_eur_min = priceValue;
+          }
+        } else if (priceStr.includes('-') || priceStr.includes('to')) {
+          const priceRange = priceStr.split(/[-to]/).map((p: string) => parseInt(p.replace(/[^0-9]/g, '')));
+          if (priceRange.length === 2 && !isNaN(priceRange[0]) && !isNaN(priceRange[1])) {
+            console.log('Setting price range:', priceRange[0], 'to', priceRange[1]);
+            criteria.price_eur_min = priceRange[0];
+            criteria.price_eur_max = priceRange[1];
+          }
+        } else {
+          const priceValue = parseInt(priceStr.replace(/[^0-9]/g, ''));
+          if (!isNaN(priceValue)) {
+            console.log('Setting price_eur_max to:', priceValue);
+            criteria.price_eur_max = priceValue;
+          }
+        }
+      }
+      
+      // Remove undefined properties
+      Object.keys(criteria).forEach(key => {
+        if (criteria[key as keyof SearchCriteria] === undefined) {
+          delete criteria[key as keyof SearchCriteria];
+        }
+      });
+      
+      console.log('Processed search criteria:', criteria);
       return criteria;
     } catch (error) {
       console.error('Error analyzing query:', error);
@@ -123,9 +176,104 @@ export default function Home() {
     try {
       // Step 1: Analyze the query using OpenAI to extract searchable categories
       const criteria = await analyzeQuery(query);
+      console.log('Setting search criteria in state:', criteria);
       setSearchCriteria(criteria);
       
-      // Step 2: Search for watches using both structured criteria and vector embeddings
+      // Step 2: Build a base query with all the search criteria
+      let supabaseQuery = supabase.from('watches').select('*');
+      
+      // Apply filters based on search criteria
+      if (criteria.model_name) {
+        console.log('Adding model_name filter:', criteria.model_name);
+        // Use case-insensitive partial match
+        supabaseQuery = supabaseQuery.ilike('model_name', `%${criteria.model_name.toLowerCase()}%`);
+      }
+      if (criteria.family_name) {
+        console.log('Adding family_name filter:', criteria.family_name);
+        supabaseQuery = supabaseQuery.ilike('family_name', `%${criteria.family_name}%`);
+      }
+      if (criteria.year_produced) {
+        console.log('Adding year_produced filter:', criteria.year_produced);
+        supabaseQuery = supabaseQuery.eq('year_produced', criteria.year_produced);
+      }
+      if (criteria.movement_name) {
+        console.log('Adding movement_name filter:', criteria.movement_name);
+        supabaseQuery = supabaseQuery.ilike('movement_name', `%${criteria.movement_name}%`);
+      }
+      if (criteria.function_name) {
+        console.log('Adding function_name filter:', criteria.function_name);
+        supabaseQuery = supabaseQuery.ilike('function_name', `%${criteria.function_name}%`);
+      }
+      if (criteria.limited_edition !== undefined) {
+        console.log('Adding limited_edition filter:', criteria.limited_edition);
+        supabaseQuery = supabaseQuery.eq('limited_edition', criteria.limited_edition);
+      }
+      if (criteria.price_eur_min) {
+        console.log('Adding price_eur_min filter:', criteria.price_eur_min);
+        supabaseQuery = supabaseQuery.gte('price_eur', criteria.price_eur_min);
+      }
+      if (criteria.price_eur_max) {
+        console.log('Adding price_eur_max filter:', criteria.price_eur_max);
+        supabaseQuery = supabaseQuery.lte('price_eur', criteria.price_eur_max);
+      }
+      if (criteria.description) {
+        console.log('Adding description filter:', criteria.description);
+        supabaseQuery = supabaseQuery.ilike('description', `%${criteria.description}%`);
+      }
+      if (criteria.dial_color) {
+        console.log('Adding dial_color filter:', criteria.dial_color);
+        // Use case-insensitive partial match
+        supabaseQuery = supabaseQuery.ilike('dial_color', `%${criteria.dial_color.toLowerCase()}%`);
+      }
+      
+      // Execute the query
+      console.log('Executing filtered query...');
+      
+      // Check if we have any filters applied
+      const hasFilters = Object.keys(criteria).length > 0;
+      console.log('Has filters applied:', hasFilters);
+      
+      if (!hasFilters) {
+        console.log('No filters applied, skipping filtered query');
+        // If no filters, go straight to vector similarity search
+        const { data, error } = await supabase.rpc('search_watches_by_similarity', {
+          query_text: query,
+          similarity_threshold: 0.1  // Lower threshold to get more results
+        });
+        
+        if (error) {
+          console.error('Supabase error:', error);
+          throw error;
+        }
+        
+        console.log('Vector similarity search results:', data?.length || 0, 'items');
+        
+        if (data && data.length > 0) {
+          setWatches(data);
+        } else {
+          setError('No watches found matching your criteria. Try a different search.');
+        }
+        return;
+      }
+      
+      const { data: filteredData, error: filteredError } = await supabaseQuery;
+      
+      if (filteredError) {
+        console.error('Supabase filtered query error:', filteredError);
+        throw filteredError;
+      }
+      
+      console.log('Filtered query results:', filteredData?.length || 0, 'items');
+      
+      // If we have filtered results, use them
+      if (filteredData && filteredData.length > 0) {
+        console.log('Using filtered results');
+        setWatches(filteredData);
+        return;
+      }
+      
+      // If no filtered results, fall back to vector similarity search
+      console.log('No filtered results, falling back to vector similarity search');
       const { data, error } = await supabase.rpc('search_watches_by_similarity', {
         query_text: query,
         similarity_threshold: 0.1  // Lower threshold to get more results
@@ -136,23 +284,11 @@ export default function Home() {
         throw error;
       }
       
+      console.log('Vector similarity search results:', data?.length || 0, 'items');
+      
       if (data && data.length > 0) {
         setWatches(data);
       } else {
-        // If no results with similarity search, try dial color search
-        if (criteria.dial_color) {
-          const { data: colorData, error: colorError } = await supabase.rpc('search_watches_by_dial_color', {
-            color_query: criteria.dial_color
-          });
-          
-          if (colorError) {
-            console.error('Dial color search error:', colorError);
-          } else if (colorData && colorData.length > 0) {
-            setWatches(colorData);
-            return;
-          }
-        }
-        
         setError('No watches found matching your criteria. Try a different search.');
       }
     } catch (err) {

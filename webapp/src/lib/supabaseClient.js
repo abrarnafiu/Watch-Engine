@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://ouoltbhcojflwuuhilho.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im91b2x0Ymhjb2pmbHd1dWhpbGhvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDQxNjU1OTYsImV4cCI6MjA1OTc0MTU5Nn0._aNJ0pnNhgUg5Jr1pNnPz6ladIWTv9bDqnAHN86g8fE';
+// In Vite, environment variables are accessed via import.meta.env
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL; 
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables');

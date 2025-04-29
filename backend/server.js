@@ -5,12 +5,21 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import rateLimit from 'express-rate-limit';
 
-// Force reload of environment variables
-const envPath = '.env';
-const envConfig = dotenv.parse(fs.readFileSync(envPath));
-Object.entries(envConfig).forEach(([key, value]) => {
-  process.env[key] = value;
-});
+// Load environment variables
+dotenv.config();
+
+// Try to load from webapp/.env if it exists (for local development)
+try {
+  const envPath = 'webapp/.env';
+  if (fs.existsSync(envPath)) {
+    const envConfig = dotenv.parse(fs.readFileSync(envPath));
+    Object.entries(envConfig).forEach(([key, value]) => {
+      process.env[key] = value;
+    });
+  }
+} catch (error) {
+  console.log('No webapp/.env file found, using environment variables');
+}
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -21,8 +30,16 @@ const limiter = rateLimit({
   max: 100 // limit each IP to 100 requests per windowMs
 });
 
+// CORS configuration
+const corsOptions = {
+  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(limiter);
 
