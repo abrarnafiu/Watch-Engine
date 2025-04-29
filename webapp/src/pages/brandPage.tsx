@@ -1,94 +1,151 @@
-// BrandPage.tsx
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../components/navbar";
 import styled from "styled-components";
+import { supabase } from "../lib/supabaseClient";
 
 interface Watch {
-  watchId: number;
-  modelName: string;
-  familyName: string;
-  yearProducedName: string;
-  url: string;
-  priceInEuro: string;
-  makeName: string;
-  movementName: string | null;
-  functionName: string | null;
+  id: string;
   reference: string;
+  model_name: string;
+  family_name: string;
+  movement_name: string | null;
+  function_name: string | null;
+  year_produced: string;
+  limited_edition: string | null;
+  price_eur: number | null;
+  image_url: string;
+  image_filename: string | null;
+  description: string | null;
+  dial_color: string | null;
+  source: string | null;
+  brand_id: number;
 }
 
 const BrandPage: React.FC = () => {
-  const { brand } = useParams<{ brand: string }>();
+  const { id } = useParams<{ id: string }>();
   const [watches, setWatches] = useState<Watch[]>([]);
+  const [brandName, setBrandName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const limit = 20;
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchWatches = async () => {
+    const fetchData = async () => {
+      if (!id) return;
+
+      setLoading(true);
+      setError(null);
+
       try {
-        const response = await fetch(
-          `https://watch-database1.p.rapidapi.com/watches/make/${brand}/page/1/limit/20`,
-          {
-            headers: {
-              'x-rapidapi-host': 'watch-database1.p.rapidapi.com',
-              'x-rapidapi-key': 'd067d98502msh30077ab58dee88cp1dac59jsn11c24a207fe7'
-            }
-          }
-        );
-        const data = await response.json();
-        setWatches(data.watches);
-        setLoading(false);
-      } catch (error) {
-        console.error("Error fetching watches:", error);
-        setError("Failed to load watches. Please try again later.");
+        // Fetch brand name based on the id
+        const { data: brandData, error: brandError } = await supabase
+          .from("brands")
+          .select("name")
+          .eq("id", id)
+          .single();
+
+        if (brandError || !brandData) {
+          setError("Brand not found.");
+          setLoading(false);
+          return;
+        }
+
+        setBrandName(brandData.name);
+
+        const from = (page - 1) * limit;
+        const to = from + limit - 1;
+
+        // Fetch watches based on the brand_id
+        const { data, error: watchError, count } = await supabase
+          .from("watches")
+          .select("*", { count: "exact" })
+          .eq("brand_id", id)
+          .range(from, to);
+
+        if (watchError) {
+          setError("Failed to load watches.");
+          console.error("❌ Watch fetch error:", watchError.message);
+          setLoading(false);
+          return;
+        }
+
+        setWatches(data || []);
+        setTotalCount(count || 0);
+      } catch (err) {
+        setError("An unexpected error occurred.");
+        console.error("❌ Error:", err);
+      } finally {
         setLoading(false);
       }
     };
 
-    if (brand) {
-      fetchWatches();
-    }
-  }, [brand]);
+    fetchData();
+  }, [id, page]);
 
-  if (error) {
-    return (
-      <Container>
-        <Navbar />
-        <Content>
-          <Error>{error}</Error>
-        </Content>
-      </Container>
-    );
-  }
+  const totalPages = totalCount ? Math.ceil(totalCount / limit) : 1;
+
+  const handlePrevPage = () => {
+    if (page > 1) setPage(page - 1);
+  };
+
+  const handleNextPage = () => {
+    if (page < totalPages) setPage(page + 1);
+  };
 
   return (
     <Container>
       <Navbar />
       <Content>
-        <Title>{watches[0]?.makeName || 'Loading...'} Watches</Title>
+        <Title>{brandName || "Loading..."} Watches</Title>
         {loading ? (
           <Loading>Loading watches...</Loading>
+        ) : error ? (
+          <Error>{error}</Error>
         ) : (
-          <WatchGrid>
-            {watches.map((watch) => (
-              <WatchCard key={watch.watchId}>
-                <WatchImage src={watch.url} alt={watch.modelName} />
-                <WatchInfo>
-                  <ModelName>{watch.modelName}</ModelName>
-                  <FamilyName>{watch.familyName}</FamilyName>
-                  <Details>
-                    <Year>{watch.yearProducedName}</Year>
-                    {watch.movementName && <Movement>{watch.movementName}</Movement>}
-                    {watch.functionName && <Function>{watch.functionName}</Function>}
-                    <Reference>Ref: {watch.reference}</Reference>
-                  </Details>
-                  {watch.priceInEuro && (
-                    <Price>€{watch.priceInEuro}</Price>
-                  )}
-                </WatchInfo>
-              </WatchCard>
-            ))}
-          </WatchGrid>
+          <>
+            <PaginationInfo>
+              Showing {(page - 1) * limit + 1}–{Math.min(page * limit, totalCount || 0)} of {totalCount} results
+            </PaginationInfo>
+            <WatchGrid>
+              {watches.map((watch) => (
+                <WatchCard key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
+                  <WatchImage
+                    src={watch.image_url || "/placeholder.jpg"}
+                    alt={watch.model_name}
+                  />
+                  <WatchInfo>
+                    <ModelName>{watch.model_name}</ModelName>
+                    <FamilyName>{watch.family_name}</FamilyName>
+                    <Details>
+                      <Year>{watch.year_produced}</Year>
+                      {watch.movement_name && <Movement>{watch.movement_name}</Movement>}
+                      {watch.function_name && <Function>{watch.function_name}</Function>}
+                      {watch.limited_edition && <LimitedEdition>{watch.limited_edition}</LimitedEdition>}
+                      <Reference>Ref: {watch.reference}</Reference>
+                    </Details>
+                    {watch.price_eur && (
+                      <Price>€{watch.price_eur.toLocaleString()}</Price>
+                    )}
+                  </WatchInfo>
+                </WatchCard>
+              ))}
+            </WatchGrid>
+            <PaginationControls>
+              <PageButton disabled={page === 1} onClick={handlePrevPage}>
+                Previous
+              </PageButton>
+              <PageText>
+                Page {page} of {totalPages}
+              </PageText>
+              <PageButton disabled={page === totalPages} onClick={handleNextPage}>
+                Next
+              </PageButton>
+            </PaginationControls>
+          </>
         )}
       </Content>
     </Container>
@@ -118,6 +175,12 @@ const Loading = styled.div`
   color: #666;
 `;
 
+const PaginationInfo = styled.div`
+  text-align: center;
+  margin-bottom: 1rem;
+  color: #777;
+`;
+
 const WatchGrid = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -131,6 +194,7 @@ const WatchCard = styled.div`
   overflow: hidden;
   box-shadow: 0 2px 5px rgba(0,0,0,0.1);
   transition: transform 0.2s ease-in-out;
+  cursor: pointer;
 
   &:hover {
     transform: translateY(-5px);
@@ -194,6 +258,38 @@ const Function = styled.p`
 const Reference = styled.p`
   margin: 0.2rem 0;
   font-family: monospace;
+`;
+
+const PaginationControls = styled.div`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+`;
+
+const PageButton = styled.button`
+  padding: 0.5rem 1rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+`;
+
+const PageText = styled.span`
+  font-size: 1rem;
+`;
+
+const LimitedEdition = styled.p`
+  margin: 0.2rem 0;
+  color: #d4af37;
+  font-weight: 500;
 `;
 
 export default BrandPage;

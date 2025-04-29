@@ -6,6 +6,7 @@ import About from './pages/about.tsx'
 import Brands from './pages/brands.tsx'
 import Login from './pages/login.tsx'
 import BrandPage from './pages/brandPage.tsx'
+import WatchDetails from './pages/watchDetails.tsx'
 import Profile from './pages/profile'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
@@ -20,7 +21,8 @@ createRoot(document.getElementById('root')!).render(
           <Route path="/about" element={<About />} />
           <Route path="/brands" element={<Brands />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/brand/:brand" element={<BrandPage />} />
+          <Route path="/brand/:id" element={<BrandPage />} />
+          <Route path="/watch/:id" element={<WatchDetails />} />
           <Route 
             path="/profile" 
             element={

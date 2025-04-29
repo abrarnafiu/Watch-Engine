@@ -2,64 +2,44 @@ import React, { useEffect, useState } from "react";
 import Navbar from "../components/navbar";
 import { Link } from "react-router-dom";
 import styled from "styled-components";
+import { supabase } from "../lib/supabaseClient";
 
 interface Brand {
-  makeId: number;
-  makeName: string;
+  id: number;
+  name: string;
 }
 
 const BrandsPage: React.FC = () => {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const API_URL = "https://watch-database1.p.rapidapi.com/make";
-  const API_HEADERS = {
-    "x-rapidapi-host": "watch-database1.p.rapidapi.com",
-    "x-rapidapi-key": "d067d98502msh30077ab58dee88cp1dac59jsn11c24a207fe7",
-  };
 
   useEffect(() => {
-    const cachedBrands = localStorage.getItem("watchBrands");
+    const fetchBrands = async () => {
+      const { data, error } = await supabase
+        .from("brands")
+        .select("id, name")
+        .order("name");
 
-    if (cachedBrands) {
-      try {
-        const parsed = JSON.parse(cachedBrands);
-        if (Array.isArray(parsed) && parsed.every(b => b && b.makeId && b.makeName)) {
-          setBrands(parsed);
-        } else {
-          // If cached data is invalid, fetch fresh data
-          fetchBrands();
-        }
-      } catch (e) {
-        // If parsing fails, fetch fresh data
-        fetchBrands();
+      if (error) {
+        console.error("Error fetching brands:", error);
+        return;
       }
-    } else {
-      fetchBrands();
-    }
+
+      if (data) {
+        setBrands(data);
+      }
+    };
+
+    fetchBrands();
   }, []);
 
-  const fetchBrands = () => {
-    fetch(API_URL, { headers: API_HEADERS })
-      .then((response) => response.json())
-      .then((data) => {
-        const brandData = data.make
-          .filter((b: any): b is Brand => b && b.makeId && b.makeName)
-          .sort((a: Brand, b: Brand) => a.makeName.localeCompare(b.makeName));
-        setBrands(brandData);
-        localStorage.setItem("watchBrands", JSON.stringify(brandData));
-      })
-      .catch((error) => console.error("Error fetching watch brands:", error));
-  };
-
   const filteredBrands = brands.filter(brand =>
-    brand.makeName.toLowerCase().includes(searchTerm.toLowerCase())
+    brand.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const groupedBrands = filteredBrands.reduce((acc: { [key: string]: Brand[] }, brand) => {
-    const firstLetter = brand.makeName.charAt(0).toUpperCase();
-    if (!acc[firstLetter]) {
-      acc[firstLetter] = [];
-    }
+    const firstLetter = brand.name.charAt(0).toUpperCase();
+    if (!acc[firstLetter]) acc[firstLetter] = [];
     acc[firstLetter].push(brand);
     return acc;
   }, {});
@@ -85,9 +65,9 @@ const BrandsPage: React.FC = () => {
             </LetterDivider>
             <BrandGrid>
               {brandList.map((brand) => (
-                <BrandCard key={brand.makeId}>
-                  <StyledLink to={`/brand/${brand.makeId}`}>
-                    {brand.makeName}
+                <BrandCard key={brand.id}>
+                  <StyledLink to={`/brand/${brand.id}`}>
+                    {brand.name}
                   </StyledLink>
                 </BrandCard>
               ))}

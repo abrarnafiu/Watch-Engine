@@ -26,7 +26,7 @@ export default function Login() {
           alert('Check your email for the confirmation link!');
         }
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });

@@ -5,11 +5,36 @@ import Navbar from '../components/navbar';
 import styled from 'styled-components';
 import type { WatchPreferences } from '../types/supabase';
 
+interface Watch {
+  id: string;
+  reference: string;
+  model_name: string;
+  family_name: string;
+  movement_name: string | null;
+  function_name: string | null;
+  year_produced: string;
+  limited_edition: string | null;
+  price_eur: number | null;
+  image_url: string;
+  image_filename: string | null;
+  description: string | null;
+  dial_color: string | null;
+  source: string | null;
+  brand_id: number;
+}
+
+interface WatchList {
+  id: string;
+  name: string;
+  user_id: string;
+  created_at: string;
+  watches?: Watch[];
+}
+
 export default function Profile() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isEditingBio, setIsEditingBio] = useState(false);
   const [isEditingPreferences, setIsEditingPreferences] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -30,6 +55,9 @@ export default function Profile() {
     name: '',
     profile_image: null,
   });
+  const [favorites, setFavorites] = useState<Watch[]>([]);
+  const [lists, setLists] = useState<WatchList[]>([]);
+  const [activeTab, setActiveTab] = useState<'preferences' | 'favorites' | 'lists'>('preferences');
 
   // Predefined options for selections
   const watchStyles = ['Dress', 'Sport', 'Dive', 'Pilot', 'Field', 'Racing', 'Smart'];
@@ -39,6 +67,8 @@ export default function Profile() {
 
   useEffect(() => {
     fetchProfile();
+    fetchFavorites();
+    fetchLists();
   }, []);
 
   async function fetchProfile() {
@@ -69,6 +99,87 @@ export default function Profile() {
       setError(error instanceof Error ? error.message : 'An error occurred');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function fetchFavorites() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('watch_id')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const watchIds = data.map(fav => fav.watch_id);
+        
+        const { data: watchesData, error: watchesError } = await supabase
+          .from('watches')
+          .select('*')
+          .in('id', watchIds);
+
+        if (watchesError) throw watchesError;
+        setFavorites(watchesData || []);
+      }
+    } catch (error) {
+      console.error('Error fetching favorites:', error);
+    }
+  }
+
+  async function fetchLists() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('watch_lists')
+        .select('*')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      if (data) {
+        // Fetch watches for each list
+        const listsWithWatches = await Promise.all(
+          data.map(async (list) => {
+            const { data: itemsData, error: itemsError } = await supabase
+              .from('watch_list_items')
+              .select('watch_id')
+              .eq('list_id', list.id);
+
+            if (itemsError) throw itemsError;
+
+            if (itemsData && itemsData.length > 0) {
+              const watchIds = itemsData.map(item => item.watch_id);
+              
+              const { data: watchesData, error: watchesError } = await supabase
+                .from('watches')
+                .select('*')
+                .in('id', watchIds);
+
+              if (watchesError) throw watchesError;
+              
+              return {
+                ...list,
+                watches: watchesData || []
+              };
+            }
+            
+            return {
+              ...list,
+              watches: []
+            };
+          })
+        );
+
+        setLists(listsWithWatches);
+      }
+    } catch (error) {
+      console.error('Error fetching lists:', error);
     }
   }
 
@@ -141,7 +252,7 @@ export default function Profile() {
       // Upload image to Supabase Storage
       const fileExt = selectedImage.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
+      const {error: uploadError } = await supabase.storage
         .from('profile-pictures')
         .upload(fileName, selectedImage, {
           cacheControl: '3600',
@@ -190,6 +301,67 @@ export default function Profile() {
     }
   };
 
+  const handleRemoveFavorite = async (watchId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('favorites')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('watch_id', watchId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setFavorites(prev => prev.filter(watch => watch.id !== watchId));
+    } catch (error) {
+      console.error('Error removing favorite:', error);
+    }
+  };
+
+  const handleRemoveFromList = async (listId: string, watchId: string) => {
+    try {
+      const { error } = await supabase
+        .from('watch_list_items')
+        .delete()
+        .eq('list_id', listId)
+        .eq('watch_id', watchId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setLists(prev => prev.map(list => {
+        if (list.id === listId) {
+          return {
+            ...list,
+            watches: list.watches?.filter(watch => watch.id !== watchId) || []
+          };
+        }
+        return list;
+      }));
+    } catch (error) {
+      console.error('Error removing from list:', error);
+    }
+  };
+
+  const handleDeleteList = async (listId: string) => {
+    try {
+      const { error } = await supabase
+        .from('watch_lists')
+        .delete()
+        .eq('id', listId);
+
+      if (error) throw error;
+      
+      // Update local state
+      setLists(prev => prev.filter(list => list.id !== listId));
+    } catch (error) {
+      console.error('Error deleting list:', error);
+    }
+  };
+
   if (loading) return <Loading>Loading...</Loading>;
 
   return (
@@ -210,6 +382,7 @@ export default function Profile() {
             </ProfilePicture>
             <ProfileDetails>
               <Name>{preferences.name || 'Add your name'}</Name>
+              <Bio>{preferences.bio || 'No bio added yet'}</Bio>
             </ProfileDetails>
           </ProfileInfo>
           <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
@@ -258,204 +431,284 @@ export default function Profile() {
 
         {error && <ErrorMessage>{error}</ErrorMessage>}
 
-        <ProfileSection>
-          <SectionTitle>About Me</SectionTitle>
-          {isEditingBio ? (
-            <>
-              <BioTextarea
-                value={preferences.bio || ''}
-                onChange={(e) => setPreferences(prev => ({
-                  ...prev,
-                  bio: e.target.value
-                }))}
-                placeholder="Tell us about yourself..."
-                rows={4}
-              />
-              <ButtonGroup>
-                <SaveButton onClick={() => {
-                  updateProfile();
-                  setIsEditingBio(false);
-                }} disabled={loading}>
-                  {loading ? 'Saving...' : 'Save Bio'}
-                </SaveButton>
-                <CancelButton onClick={() => setIsEditingBio(false)}>
-                  Cancel
-                </CancelButton>
-              </ButtonGroup>
-            </>
-          ) : (
-            <BioDisplay>
-              <BioText>{preferences.bio || 'No bio added yet'}</BioText>
-              <EditButton onClick={() => setIsEditingBio(true)}>
-                Edit Bio
-              </EditButton>
-            </BioDisplay>
-          )}
-        </ProfileSection>
+        <TabsContainer>
+          <Tab 
+            active={activeTab === 'preferences'} 
+            onClick={() => setActiveTab('preferences')}
+          >
+            Preferences
+          </Tab>
+          <Tab 
+            active={activeTab === 'favorites'} 
+            onClick={() => setActiveTab('favorites')}
+          >
+            Favorites ({favorites.length})
+          </Tab>
+          <Tab 
+            active={activeTab === 'lists'} 
+            onClick={() => setActiveTab('lists')}
+          >
+            Lists ({lists.length})
+          </Tab>
+        </TabsContainer>
 
-        <PreferencesForm>
-          <SectionHeader>
-            <SectionTitle>Watch Preferences</SectionTitle>
-            {!isEditingPreferences && (
-              <EditButton onClick={() => setIsEditingPreferences(true)}>
-                Edit Preferences
-              </EditButton>
+        {activeTab === 'preferences' && (
+          <PreferencesForm>
+            <SectionHeader>
+              <SectionTitle>Watch Preferences</SectionTitle>
+              {!isEditingPreferences && (
+                <EditButton onClick={() => setIsEditingPreferences(true)}>
+                  Edit Preferences
+                </EditButton>
+              )}
+            </SectionHeader>
+
+            {isEditingPreferences ? (
+              <>
+                <Section>
+                  <SectionTitle>Price Range</SectionTitle>
+                  <PriceRangeContainer>
+                    <PriceInput
+                      type="number"
+                      value={preferences.price_range_min}
+                      onChange={(e) => setPreferences(prev => ({
+                        ...prev,
+                        price_range_min: parseInt(e.target.value)
+                      }))}
+                      placeholder="Min Price"
+                    />
+                    <span>to</span>
+                    <PriceInput
+                      type="number"
+                      value={preferences.price_range_max}
+                      onChange={(e) => setPreferences(prev => ({
+                        ...prev,
+                        price_range_max: parseInt(e.target.value)
+                      }))}
+                      placeholder="Max Price"
+                    />
+                  </PriceRangeContainer>
+                </Section>
+
+                <Section>
+                  <SectionTitle>Watch Styles</SectionTitle>
+                  <OptionsGrid>
+                    {watchStyles.map(style => (
+                      <Checkbox
+                        key={style}
+                        checked={preferences.preferred_styles.includes(style)}
+                        onChange={(e) => {
+                          setPreferences(prev => ({
+                            ...prev,
+                            preferred_styles: e.target.checked
+                              ? [...prev.preferred_styles, style]
+                              : prev.preferred_styles.filter(s => s !== style)
+                          }));
+                        }}
+                        label={style}
+                      />
+                    ))}
+                  </OptionsGrid>
+                </Section>
+
+                <Section>
+                  <SectionTitle>Materials</SectionTitle>
+                  <OptionsGrid>
+                    {materials.map(material => (
+                      <Checkbox
+                        key={material}
+                        checked={preferences.preferred_materials.includes(material)}
+                        onChange={(e) => {
+                          setPreferences(prev => ({
+                            ...prev,
+                            preferred_materials: e.target.checked
+                              ? [...prev.preferred_materials, material]
+                              : prev.preferred_materials.filter(m => m !== material)
+                          }));
+                        }}
+                        label={material}
+                      />
+                    ))}
+                  </OptionsGrid>
+                </Section>
+
+                <Section>
+                  <SectionTitle>Complications</SectionTitle>
+                  <OptionsGrid>
+                    {complications.map(complication => (
+                      <Checkbox
+                        key={complication}
+                        checked={preferences.preferred_complications.includes(complication)}
+                        onChange={(e) => {
+                          setPreferences(prev => ({
+                            ...prev,
+                            preferred_complications: e.target.checked
+                              ? [...prev.preferred_complications, complication]
+                              : prev.preferred_complications.filter(c => c !== complication)
+                          }));
+                        }}
+                        label={complication}
+                      />
+                    ))}
+                  </OptionsGrid>
+                </Section>
+
+                <Section>
+                  <SectionTitle>Dial Colors</SectionTitle>
+                  <ColorGrid>
+                    {colors.map(color => (
+                      <ColorOption
+                        key={color}
+                        selected={preferences.dial_colors.includes(color)}
+                        onClick={() => {
+                          setPreferences(prev => ({
+                            ...prev,
+                            dial_colors: prev.dial_colors.includes(color)
+                              ? prev.dial_colors.filter(c => c !== color)
+                              : [...prev.dial_colors, color]
+                          }));
+                        }}
+                      >
+                        {color}
+                      </ColorOption>
+                    ))}
+                  </ColorGrid>
+                </Section>
+
+                <ButtonGroup>
+                  <SaveButton onClick={() => {
+                    updateProfile();
+                    setIsEditingPreferences(false);
+                  }} disabled={loading}>
+                    {loading ? 'Saving...' : 'Save Preferences'}
+                  </SaveButton>
+                  <CancelButton onClick={() => setIsEditingPreferences(false)}>
+                    Cancel
+                  </CancelButton>
+                </ButtonGroup>
+              </>
+            ) : (
+              <PreferencesDisplay>
+                <PreferenceItem>
+                  <Label>Price Range:</Label>
+                  <Value>${preferences.price_range_min} - ${preferences.price_range_max}</Value>
+                </PreferenceItem>
+                
+                <PreferenceItem>
+                  <Label>Watch Styles:</Label>
+                  <Value>{preferences.preferred_styles.length > 0 ? preferences.preferred_styles.join(', ') : 'None selected'}</Value>
+                </PreferenceItem>
+                
+                <PreferenceItem>
+                  <Label>Materials:</Label>
+                  <Value>{preferences.preferred_materials.length > 0 ? preferences.preferred_materials.join(', ') : 'None selected'}</Value>
+                </PreferenceItem>
+                
+                <PreferenceItem>
+                  <Label>Complications:</Label>
+                  <Value>{preferences.preferred_complications.length > 0 ? preferences.preferred_complications.join(', ') : 'None selected'}</Value>
+                </PreferenceItem>
+                
+                <PreferenceItem>
+                  <Label>Dial Colors:</Label>
+                  <Value>{preferences.dial_colors.length > 0 ? preferences.dial_colors.join(', ') : 'None selected'}</Value>
+                </PreferenceItem>
+              </PreferencesDisplay>
             )}
-          </SectionHeader>
+          </PreferencesForm>
+        )}
 
-          {isEditingPreferences ? (
-            <>
-              <Section>
-                <SectionTitle>Price Range</SectionTitle>
-                <PriceRangeContainer>
-                  <PriceInput
-                    type="number"
-                    value={preferences.price_range_min}
-                    onChange={(e) => setPreferences(prev => ({
-                      ...prev,
-                      price_range_min: parseInt(e.target.value)
-                    }))}
-                    placeholder="Min Price"
-                  />
-                  <span>to</span>
-                  <PriceInput
-                    type="number"
-                    value={preferences.price_range_max}
-                    onChange={(e) => setPreferences(prev => ({
-                      ...prev,
-                      price_range_max: parseInt(e.target.value)
-                    }))}
-                    placeholder="Max Price"
-                  />
-                </PriceRangeContainer>
-              </Section>
-
-              <Section>
-                <SectionTitle>Watch Styles</SectionTitle>
-                <OptionsGrid>
-                  {watchStyles.map(style => (
-                    <Checkbox
-                      key={style}
-                      checked={preferences.preferred_styles.includes(style)}
-                      onChange={(e) => {
-                        setPreferences(prev => ({
-                          ...prev,
-                          preferred_styles: e.target.checked
-                            ? [...prev.preferred_styles, style]
-                            : prev.preferred_styles.filter(s => s !== style)
-                        }));
-                      }}
-                      label={style}
-                    />
-                  ))}
-                </OptionsGrid>
-              </Section>
-
-              <Section>
-                <SectionTitle>Materials</SectionTitle>
-                <OptionsGrid>
-                  {materials.map(material => (
-                    <Checkbox
-                      key={material}
-                      checked={preferences.preferred_materials.includes(material)}
-                      onChange={(e) => {
-                        setPreferences(prev => ({
-                          ...prev,
-                          preferred_materials: e.target.checked
-                            ? [...prev.preferred_materials, material]
-                            : prev.preferred_materials.filter(m => m !== material)
-                        }));
-                      }}
-                      label={material}
-                    />
-                  ))}
-                </OptionsGrid>
-              </Section>
-
-              <Section>
-                <SectionTitle>Complications</SectionTitle>
-                <OptionsGrid>
-                  {complications.map(complication => (
-                    <Checkbox
-                      key={complication}
-                      checked={preferences.preferred_complications.includes(complication)}
-                      onChange={(e) => {
-                        setPreferences(prev => ({
-                          ...prev,
-                          preferred_complications: e.target.checked
-                            ? [...prev.preferred_complications, complication]
-                            : prev.preferred_complications.filter(c => c !== complication)
-                        }));
-                      }}
-                      label={complication}
-                    />
-                  ))}
-                </OptionsGrid>
-              </Section>
-
-              <Section>
-                <SectionTitle>Dial Colors</SectionTitle>
-                <ColorGrid>
-                  {colors.map(color => (
-                    <ColorOption
-                      key={color}
-                      selected={preferences.dial_colors.includes(color)}
-                      onClick={() => {
-                        setPreferences(prev => ({
-                          ...prev,
-                          dial_colors: prev.dial_colors.includes(color)
-                            ? prev.dial_colors.filter(c => c !== color)
-                            : [...prev.dial_colors, color]
-                        }));
+        {activeTab === 'favorites' && (
+          <FavoritesSection>
+            <SectionTitle>My Favorites</SectionTitle>
+            {favorites.length === 0 ? (
+              <EmptyState>
+                <EmptyIcon>❤️</EmptyIcon>
+                <EmptyText>You haven't favorited any watches yet</EmptyText>
+                <BrowseButton onClick={() => navigate('/brands')}>Browse Watches</BrowseButton>
+              </EmptyState>
+            ) : (
+              <WatchGrid>
+                {favorites.map((watch) => (
+                  <WatchCard key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
+                    <WatchImage src={watch.image_url || "/placeholder.jpg"} alt={watch.model_name} />
+                    <WatchInfo>
+                      <ModelName>{watch.model_name}</ModelName>
+                      <FamilyName>{watch.family_name}</FamilyName>
+                      <Details>
+                        <Year>{watch.year_produced}</Year>
+                        {watch.price_eur && <Price>€{watch.price_eur.toLocaleString()}</Price>}
+                      </Details>
+                    </WatchInfo>
+                    <RemoveButton 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRemoveFavorite(watch.id);
                       }}
                     >
-                      {color}
-                    </ColorOption>
-                  ))}
-                </ColorGrid>
-              </Section>
+                      ×
+                    </RemoveButton>
+                  </WatchCard>
+                ))}
+              </WatchGrid>
+            )}
+          </FavoritesSection>
+        )}
 
-              <ButtonGroup>
-                <SaveButton onClick={() => {
-                  updateProfile();
-                  setIsEditingPreferences(false);
-                }} disabled={loading}>
-                  {loading ? 'Saving...' : 'Save Preferences'}
-                </SaveButton>
-                <CancelButton onClick={() => setIsEditingPreferences(false)}>
-                  Cancel
-                </CancelButton>
-              </ButtonGroup>
-            </>
-          ) : (
-            <PreferencesDisplay>
-              <PreferenceItem>
-                <Label>Price Range:</Label>
-                <Value>${preferences.price_range_min} - ${preferences.price_range_max}</Value>
-              </PreferenceItem>
-              
-              <PreferenceItem>
-                <Label>Watch Styles:</Label>
-                <Value>{preferences.preferred_styles.length > 0 ? preferences.preferred_styles.join(', ') : 'None selected'}</Value>
-              </PreferenceItem>
-              
-              <PreferenceItem>
-                <Label>Materials:</Label>
-                <Value>{preferences.preferred_materials.length > 0 ? preferences.preferred_materials.join(', ') : 'None selected'}</Value>
-              </PreferenceItem>
-              
-              <PreferenceItem>
-                <Label>Complications:</Label>
-                <Value>{preferences.preferred_complications.length > 0 ? preferences.preferred_complications.join(', ') : 'None selected'}</Value>
-              </PreferenceItem>
-              
-              <PreferenceItem>
-                <Label>Dial Colors:</Label>
-                <Value>{preferences.dial_colors.length > 0 ? preferences.dial_colors.join(', ') : 'None selected'}</Value>
-              </PreferenceItem>
-            </PreferencesDisplay>
-          )}
-        </PreferencesForm>
+        {activeTab === 'lists' && (
+          <ListsSection>
+            <SectionTitle>My Lists</SectionTitle>
+            {lists.length === 0 ? (
+              <EmptyState>
+                <EmptyIcon>📋</EmptyIcon>
+                <EmptyText>You haven't created any lists yet</EmptyText>
+                <BrowseButton onClick={() => navigate('/brands')}>Browse Watches</BrowseButton>
+              </EmptyState>
+            ) : (
+              <ListsContainer>
+                {lists.map((list) => (
+                  <ListCard key={list.id}>
+                    <ListHeader>
+                      <ListName>{list.name}</ListName>
+                      <ListActions>
+                        <ListActionButton onClick={() => handleDeleteList(list.id)}>
+                          🗑️
+                        </ListActionButton>
+                      </ListActions>
+                    </ListHeader>
+                    {list.watches && list.watches.length > 0 ? (
+                      <ListWatches>
+                        {list.watches.map((watch) => (
+                          <ListWatchItem key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
+                            <ListWatchImage src={watch.image_url || "/placeholder.jpg"} alt={watch.model_name} />
+                            <ListWatchInfo>
+                              <ListWatchName>{watch.model_name}</ListWatchName>
+                              <ListWatchDetails>
+                                {watch.price_eur && <ListWatchPrice>€{watch.price_eur.toLocaleString()}</ListWatchPrice>}
+                              </ListWatchDetails>
+                            </ListWatchInfo>
+                            <RemoveButton 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveFromList(list.id, watch.id);
+                              }}
+                            >
+                              ×
+                            </RemoveButton>
+                          </ListWatchItem>
+                        ))}
+                      </ListWatches>
+                    ) : (
+                      <EmptyListState>
+                        <EmptyListText>No watches in this list</EmptyListText>
+                      </EmptyListState>
+                    )}
+                  </ListCard>
+                ))}
+              </ListsContainer>
+            )}
+          </ListsSection>
+        )}
       </Content>
     </Container>
   );
@@ -468,24 +721,99 @@ const Container = styled.div`
 `;
 
 const Content = styled.div`
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 2rem;
 `;
 
-const Header = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+const ProfileHeader = styled.div`
+  position: relative;
   margin-bottom: 2rem;
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 `;
 
-const Title = styled.h1`
-  color: #333;
+const Banner = styled.div`
+  height: 200px;
+  background: linear-gradient(45deg, #1a1a1a, #333);
+`;
+
+const ProfileInfo = styled.div`
+  display: flex;
+  align-items: flex-end;
+  gap: 2rem;
+  padding: 0 2rem;
+  margin-top: -50px;
+  position: relative;
+`;
+
+const ProfilePicture = styled.div`
+  position: relative;
+  width: 150px;
+  height: 150px;
+`;
+
+const ProfileImage = styled.img`
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 4px solid white;
+  object-fit: cover;
+  background-color: #f0f0f0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+`;
+
+const EditProfilePictureButton = styled.button`
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: #007bff;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 1.2rem;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: #0056b3;
+  }
+`;
+
+const EditIcon = styled.span`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const ProfileDetails = styled.div`
+  margin-bottom: 1rem;
+  flex: 1;
+`;
+
+const Name = styled.h2`
   margin: 0;
+  font-size: 2rem;
+  color: #333;
+`;
+
+const Bio = styled.p`
+  margin: 0.5rem 0 0;
+  color: #666;
+  font-size: 1rem;
 `;
 
 const LogoutButton = styled.button`
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
   padding: 0.5rem 1rem;
   background-color: #dc3545;
   color: white;
@@ -498,21 +826,49 @@ const LogoutButton = styled.button`
   }
 `;
 
+const TabsContainer = styled.div`
+  display: flex;
+  margin-bottom: 2rem;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+`;
+
+const Tab = styled.button<{ active: boolean }>`
+  flex: 1;
+  padding: 1rem;
+  background-color: ${props => props.active ? '#007bff' : 'white'};
+  color: ${props => props.active ? 'white' : '#333'};
+  border: none;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.2s;
+
+  &:hover {
+    background-color: ${props => props.active ? '#0056b3' : '#f0f0f0'};
+  }
+`;
+
 const PreferencesForm = styled.div`
   background: white;
   padding: 2rem;
-  border-radius: 10px;
+  border-radius: 12px;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
 `;
 
-const Section = styled.div`
-  margin-bottom: 2rem;
+const SectionHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
 `;
 
 const SectionTitle = styled.h2`
   color: #333;
-  font-size: 1.2rem;
-  margin-bottom: 1rem;
+  font-size: 1.5rem;
+  margin: 0 0 1.5rem 0;
 `;
 
 const PriceRangeContainer = styled.div`
@@ -554,8 +910,7 @@ const ColorOption = styled.div<{ selected: boolean }>`
 `;
 
 const SaveButton = styled.button`
-  width: 100%;
-  padding: 1rem;
+  padding: 0.8rem 1.5rem;
   background-color: #007bff;
   color: white;
   border: none;
@@ -621,46 +976,6 @@ const CheckboxContainer = styled.div`
   }
 `;
 
-const BioTextarea = styled.textarea`
-  width: 100%;
-  padding: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  resize: vertical;
-  min-height: 100px;
-
-  &:focus {
-    outline: none;
-    border-color: #007bff;
-  }
-`;
-
-const ProfileSection = styled.div`
-  background: white;
-  padding: 2rem;
-  border-radius: 10px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  margin-bottom: 2rem;
-`;
-
-const BioDisplay = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 1rem;
-`;
-
-const BioText = styled.p`
-  flex: 1;
-  margin: 0;
-  padding: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  min-height: 100px;
-  white-space: pre-wrap;
-`;
-
 const EditButton = styled.button`
   padding: 0.5rem 1rem;
   background-color: #007bff;
@@ -682,7 +997,7 @@ const ButtonGroup = styled.div`
 `;
 
 const CancelButton = styled.button`
-  padding: 0.5rem 1rem;
+  padding: 0.8rem 1.5rem;
   background-color: #6c757d;
   color: white;
   border: none;
@@ -694,11 +1009,8 @@ const CancelButton = styled.button`
   }
 `;
 
-const SectionHeader = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
+const Section = styled.div`
+  margin-bottom: 2rem;
 `;
 
 const PreferencesDisplay = styled.div`
@@ -731,86 +1043,13 @@ const Value = styled.span`
   color: #212529;
 `;
 
-const ProfileHeader = styled.div`
-  position: relative;
-  margin-bottom: 2rem;
-`;
-
-const Banner = styled.div`
-  height: 200px;
-  background: linear-gradient(45deg, #1a1a1a, #333);
-  border-radius: 10px 10px 0 0;
-`;
-
-const ProfileInfo = styled.div`
-  display: flex;
-  align-items: flex-end;
-  gap: 2rem;
-  padding: 0 2rem;
-  margin-top: -50px;
-`;
-
-const ProfilePicture = styled.div`
-  position: relative;
-  width: 150px;
-  height: 150px;
-`;
-
-const ProfileImage = styled.img`
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  border: 4px solid white;
-  object-fit: cover;
-  background-color: #f0f0f0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-`;
-
-const EditProfilePictureButton = styled.button`
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background-color: #007bff;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-size: 1.2rem;
-  transition: background-color 0.2s;
-
-  &:hover {
-    background-color: #0056b3;
-  }
-`;
-
-const EditIcon = styled.span`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
-const ProfileDetails = styled.div`
-  margin-bottom: 1rem;
-`;
-
-const Name = styled.h2`
-  margin: 0;
-  font-size: 2rem;
-  color: #333;
-`;
-
 const ModalOverlay = styled.div`
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: rgba(0,0,0,0.5);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -903,4 +1142,243 @@ const ImagePreview = styled.img`
   max-height: 300px;
   object-fit: contain;
   border-radius: 8px;
+`;
+
+const FavoritesSection = styled.div`
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+`;
+
+const WatchGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 1.5rem;
+`;
+
+const WatchCard = styled.div`
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  transition: transform 0.2s ease-in-out;
+  cursor: pointer;
+  position: relative;
+
+  &:hover {
+    transform: translateY(-5px);
+  }
+`;
+
+const WatchImage = styled.img`
+  width: 100%;
+  height: 180px;
+  object-fit: cover;
+`;
+
+const WatchInfo = styled.div`
+  padding: 1rem;
+`;
+
+const ModelName = styled.h3`
+  margin: 0;
+  color: #333;
+  font-size: 1.1rem;
+`;
+
+const FamilyName = styled.p`
+  color: #666;
+  margin: 0.5rem 0;
+  font-size: 0.9rem;
+`;
+
+const Details = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+`;
+
+const Year = styled.span`
+  color: #666;
+  font-size: 0.9rem;
+`;
+
+const Price = styled.span`
+  color: #28a745;
+  font-weight: bold;
+  font-size: 0.9rem;
+`;
+
+const RemoveButton = styled.button`
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.8);
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+  cursor: pointer;
+  color: #dc3545;
+  transition: all 0.2s;
+
+  &:hover {
+    background-color: #dc3545;
+    color: white;
+  }
+`;
+
+const ListsSection = styled.div`
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+`;
+
+const ListsContainer = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+`;
+
+const ListCard = styled.div`
+  background: #f8f9fa;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+`;
+
+const ListHeader = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem;
+  background: #e9ecef;
+`;
+
+const ListName = styled.h3`
+  margin: 0;
+  color: #333;
+  font-size: 1.2rem;
+`;
+
+const ListActions = styled.div`
+  display: flex;
+  gap: 0.5rem;
+`;
+
+const ListActionButton = styled.button`
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 1.2rem;
+  padding: 0.3rem;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+
+  &:hover {
+    background-color: rgba(0, 0, 0, 0.1);
+  }
+`;
+
+const ListWatches = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1rem;
+`;
+
+const ListWatchItem = styled.div`
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  transition: transform 0.2s ease-in-out;
+  cursor: pointer;
+  position: relative;
+
+  &:hover {
+    transform: translateY(-5px);
+  }
+`;
+
+const ListWatchImage = styled.img`
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+`;
+
+const ListWatchInfo = styled.div`
+  padding: 0.8rem;
+`;
+
+const ListWatchName = styled.h4`
+  margin: 0;
+  color: #333;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const ListWatchDetails = styled.div`
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.3rem;
+`;
+
+const ListWatchPrice = styled.span`
+  color: #28a745;
+  font-weight: bold;
+  font-size: 0.8rem;
+`;
+
+const EmptyState = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  text-align: center;
+`;
+
+const EmptyIcon = styled.div`
+  font-size: 3rem;
+  margin-bottom: 1rem;
+`;
+
+const EmptyText = styled.p`
+  color: #666;
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+`;
+
+const BrowseButton = styled.button`
+  padding: 0.8rem 1.5rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+
+  &:hover {
+    background-color: #0056b3;
+  }
+`;
+
+const EmptyListState = styled.div`
+  padding: 2rem;
+  text-align: center;
+`;
+
+const EmptyListText = styled.p`
+  color: #666;
+  font-size: 1rem;
+  margin: 0;
 `; 

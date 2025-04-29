@@ -1,8 +1,10 @@
+import logo from 'webapp/src/assets/logo-placeholder-image.png';
+
 export default function Navbar() {
   return (
     <div style={styles.navbar}>
       <ul style={styles.buttonsContainer}>
-        <a href="/" style={styles.buttons}><li><img src="C:\Users\Habibur\Downloads\Watch Project\webapp\src\assets\logo-placeholder-image.png"></img></li></a>
+        <a href="/" style={styles.buttons}><li><img src={logo} alt="Logo" style={{ height: '30px' }}></img></li></a>
         <a href="/about" style={styles.buttons}><li>About</li></a>
         <a href="/brands" style={styles.buttons}><li>Brands</li></a>
         <a href="/profile" style={styles.buttons}><li>Profile</li></a>
