@@ -8,18 +8,6 @@ import rateLimit from 'express-rate-limit';
 // Load environment variables
 dotenv.config();
 
-// Try to load from webapp/.env if it exists (for local development)
-try {
-  const envPath = 'webapp/.env';
-  if (fs.existsSync(envPath)) {
-    const envConfig = dotenv.parse(fs.readFileSync(envPath));
-    Object.entries(envConfig).forEach(([key, value]) => {
-      process.env[key] = value;
-    });
-  }
-} catch (error) {
-  console.log('No webapp/.env file found, using environment variables');
-}
 
 const app = express();
 const port = process.env.PORT || 5000;
@@ -42,9 +30,6 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(limiter);
-
-// Log the API key being used (first 10 characters only)
-console.log('Using OpenAI API key:', process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 10) + '...' : 'Not set');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
