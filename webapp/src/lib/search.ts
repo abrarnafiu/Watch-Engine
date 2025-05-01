@@ -1,8 +1,65 @@
 import { supabase } from './supabaseClient';
+import { useAuth } from '../contexts/AuthContext';
+import { User } from '@supabase/supabase-js';
+
+// Constants for search limits
+const FREE_SEARCHES_BEFORE_SIGNUP = 3;
+const FREE_SEARCHES_AFTER_SIGNUP = 17;
+
+// Utility function to check and update search count
+export async function checkAndUpdateSearchCount(userId: string | null) {
+  if (!userId) {
+    // For anonymous users, check if they've exceeded the free search limit
+    const searchCount = localStorage.getItem('anonymousSearchCount');
+    const count = searchCount ? parseInt(searchCount) : 0;
+    
+    if (count >= FREE_SEARCHES_BEFORE_SIGNUP) {
+      throw new Error('Please sign up to continue searching');
+    }
+    
+    localStorage.setItem('anonymousSearchCount', (count + 1).toString());
+    return;
+  }
+
+  // For authenticated users
+  const { data: searchCountData, error } = await supabase
+    .from('user_search_counts')
+    .select('search_count')
+    .eq('user_id', userId)
+    .single();
+
+  if (error) {
+    // If no record exists, create one
+    if (error.code === 'PGRST116') {
+      const { error: insertError } = await supabase
+        .from('user_search_counts')
+        .insert([{ user_id: userId, search_count: 1 }]);
+      
+      if (insertError) throw insertError;
+      return;
+    }
+    throw error;
+  }
+
+  if (searchCountData.search_count >= FREE_SEARCHES_AFTER_SIGNUP) {
+    throw new Error('You have reached your search limit. Please upgrade to continue searching.');
+  }
+
+  // Update search count
+  const { error: updateError } = await supabase
+    .from('user_search_counts')
+    .update({ search_count: searchCountData.search_count + 1 })
+    .eq('user_id', userId);
+
+  if (updateError) throw updateError;
+}
 
 // Utility function to call the analyze-query API endpoint
-async function analyzeQuery(query: string, schema: any) {
+export async function analyzeQuery(query: string, schema: any) {
   try {
+    const { data: { user } } = await supabase.auth.getUser();
+    await checkAndUpdateSearchCount(user?.id || null);
+
     const response = await fetch('/api/analyze-query', {
       method: 'POST',
       headers: {
