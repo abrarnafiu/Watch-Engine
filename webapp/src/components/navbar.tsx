@@ -1,76 +1,43 @@
-import { Link } from 'react-router-dom';
-import styled from 'styled-components';
-import { useAuth } from '../contexts/AuthContext';
-import { supabase } from '../lib/supabaseClient';
-
-const Nav = styled.nav`
-  background-color: #333;
-  padding: 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-`;
-
-const NavLinks = styled.div`
-  display: flex;
-  gap: 1rem;
-`;
-
-const NavLink = styled(Link)`
-  color: white;
-  text-decoration: none;
-  
-  &:hover {
-    text-decoration: underline;
-  }
-`;
-
-const ProfileLink = styled(NavLink)`
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-`;
-
-const ProfileImage = styled.img`
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  object-fit: cover;
-`;
+import logo from 'webapp/src/assets/logo-placeholder-image.png';
 
 export default function Navbar() {
-  const { user } = useAuth();
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-  };
-
   return (
-    <Nav>
-      <NavLinks>
-        <NavLink to="/">Home</NavLink>
-        <NavLink to="/brands">Brands</NavLink>
-      </NavLinks>
-      <NavLinks>
-        {user ? (
-          <>
-            <ProfileLink to="/profile">
-              {user.user_metadata?.avatar_url && (
-                <ProfileImage
-                  src={user.user_metadata.avatar_url}
-                  alt="Profile"
-                />
-              )}
-              Profile
-            </ProfileLink>
-            <NavLink to="/" onClick={handleSignOut}>
-              Sign Out
-            </NavLink>
-          </>
-        ) : (
-          <NavLink to="/login">Login</NavLink>
-        )}
-      </NavLinks>
-    </Nav>
-  );
+    <div style={styles.navbar}>
+      <ul style={styles.buttonsContainer}>
+        <a href="/" style={styles.buttons}><li><img src={logo} alt="Logo" style={{ height: '30px' }}></img></li></a>
+        <a href="/about" style={styles.buttons}><li>About</li></a>
+        <a href="/brands" style={styles.buttons}><li>Brands</li></a>
+        <a href="/profile" style={styles.buttons}><li>Profile</li></a>
+      </ul>
+    </div>
+  )
+}
+
+const styles = {
+  navbar: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '1rem 2rem',
+    backgroundColor: '#1a1a1a',
+    color: 'rgba(255, 255, 255, 0.87)',
+    margin: 0,
+  },
+  
+  buttonsContainer: {
+    margin: 0,
+    fontSize: '1.5rem',
+    fontWeight: 500,
+    textDecoration: 'none',
+    display: 'flex',
+    gap: '2rem',
+    listStyle: 'none',
+    border: 'none',
+    padding: 0,
+  },
+
+  buttons: {
+    textDecoration: 'none',
+    color: 'white',
+  }
 }

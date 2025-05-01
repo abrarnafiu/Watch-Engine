@@ -2,15 +2,19 @@ import express from 'express';
 import cors from 'cors';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
-import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
 
-// Load environment variables
-dotenv.config();
+// Get the directory name in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
+// Load environment variables from the root .env file
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
-const port = process.env.PORT || 5000;
+const port = 5000;
 
 // Rate limiting
 const limiter = rateLimit({
@@ -20,7 +24,7 @@ const limiter = rateLimit({
 
 // CORS configuration
 const corsOptions = {
-  origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+  origin: 'http://localhost:5173',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true

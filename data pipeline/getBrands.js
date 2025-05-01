@@ -1,4 +1,4 @@
-import { supabase } from '../webapp/src/lib/supabaseClient.js';
+import { supabase } from 'webapp/src/lib/supabaseClient.js';
 import axios from 'axios';
 
 // API request options
@@ -6,7 +6,7 @@ const options = {
   method: 'GET',
   url: 'https://watch-database1.p.rapidapi.com/make',
   headers: {
-    'x-rapidapi-key': process.env.RAPIDAPI_KEY,
+    'x-rapidapi-key': import.meta.env.RAPIDAPI_KEY,
     'x-rapidapi-host': 'watch-database1.p.rapidapi.com'
   }
 };

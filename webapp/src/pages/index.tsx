@@ -493,8 +493,7 @@ const Title = styled.h1`
   margin-bottom: 1rem;
 `;
 
-const Subtitle = styled.p`
-  color: #666;
+const Subtitle = styled.p`  color: #666;
   font-size: 1.1rem;
   margin-bottom: 2rem;
 `;
@@ -717,3 +716,4 @@ const LimitedEdition = styled.span`
   font-size: 0.8rem;
   margin-left: 0.5rem;
 `;
+

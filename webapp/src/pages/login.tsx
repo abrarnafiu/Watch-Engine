@@ -4,56 +4,6 @@ import styled from 'styled-components';
 import { supabase } from '../lib/supabaseClient';
 import { useNavigate } from 'react-router-dom';
 
-const Container = styled.div`
-  max-width: 400px;
-  margin: 0 auto;
-  padding: 2rem;
-`;
-
-const Form = styled.form`
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-`;
-
-const Input = styled.input`
-  padding: 0.5rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-`;
-
-const Button = styled.button`
-  padding: 0.5rem 1rem;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-
-  &:hover {
-    background-color: #0056b3;
-  }
-`;
-
-const GoogleButton = styled(Button)`
-  background-color: #fff;
-  color: #000;
-  border: 1px solid #ccc;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-
-  &:hover {
-    background-color: #f8f9fa;
-  }
-`;
-
-const ErrorMessage = styled.div`
-  color: red;
-  margin-top: 1rem;
-`;
-
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -100,7 +50,7 @@ export default function Login() {
           password,
         });
         if (error) throw error;
-        navigate('/profile-setup');
+        navigate('/');
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -110,50 +60,178 @@ export default function Login() {
   };
 
   return (
-    <>
+    <Container>
       <Navbar />
-      <Container>
-        <h1>{mode === 'login' ? 'Login' : 'Sign Up'}</h1>
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+      <Content>
         <Form onSubmit={handleSubmit}>
-          <div>
-            <label>Email</label>
-            <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
-          <div>
-            <label>Password</label>
-            <Input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
+          <Title>{mode === 'login' ? 'Login' : 'Sign Up'}</Title>
+          
+          <GoogleButton type="button" onClick={handleGoogleLogin}>
+            Continue with Google
+          </GoogleButton>
+          
+          <Divider>or</Divider>
+          
+          <Input
+            type="email"
+            placeholder="Email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+          <Input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          
+          {error && <ErrorMessage>{error}</ErrorMessage>}
+          
           <Button type="submit" disabled={loading}>
             {loading ? 'Loading...' : mode === 'login' ? 'Login' : 'Sign Up'}
           </Button>
-          <GoogleButton type="button" onClick={handleGoogleLogin} disabled={loading}>
-            <img
-              src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
-              alt="Google logo"
-              width="20"
-              height="20"
-            />
-            {mode === 'login' ? 'Login with Google' : 'Sign up with Google'}
-          </GoogleButton>
-          <Button
-            type="button"
-            onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}
-          >
-            {mode === 'login' ? 'Need an account? Sign up' : 'Already have an account? Login'}
-          </Button>
+          
+          <ToggleMode>
+            {mode === 'login' ? (
+              <>
+                Don't have an account?{' '}
+                <ToggleButton type="button" onClick={() => setMode('signup')}>
+                  Sign Up
+                </ToggleButton>
+              </>
+            ) : (
+              <>
+                Already have an account?{' '}
+                <ToggleButton type="button" onClick={() => setMode('login')}>
+                  Login
+                </ToggleButton>
+              </>
+            )}
+          </ToggleMode>
         </Form>
-      </Container>
-    </>
+      </Content>
+    </Container>
   );
 }
+
+const Container = styled.div`
+  min-height: 100vh;
+  background-color: #f5f5f5;
+`;
+
+const Content = styled.div`
+  max-width: 400px;
+  margin: 2rem auto;
+  padding: 2rem;
+  background: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+`;
+
+const Form = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const Title = styled.h1`
+  text-align: center;
+  color: #333;
+  margin-bottom: 1.5rem;
+`;
+
+const Input = styled.input`
+  padding: 0.8rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  
+  &:focus {
+    outline: none;
+    border-color: #007bff;
+  }
+`;
+
+const Button = styled.button`
+  padding: 0.8rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  cursor: pointer;
+  
+  &:hover {
+    background-color: #0056b3;
+  }
+  
+  &:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
+`;
+
+const GoogleButton = styled(Button)`
+  background-color: white;
+  color: #333;
+  border: 1px solid #ddd;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  
+  &:hover {
+    background-color: #f8f9fa;
+  }
+`;
+
+const Divider = styled.div`
+  text-align: center;
+  color: #666;
+  position: relative;
+  
+  &:before,
+  &:after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 45%;
+    height: 1px;
+    background-color: #ddd;
+  }
+  
+  &:before {
+    left: 0;
+  }
+  
+  &:after {
+    right: 0;
+  }
+`;
+
+const ErrorMessage = styled.div`
+  color: #dc3545;
+  background-color: #f8d7da;
+  padding: 0.8rem;
+  border-radius: 4px;
+  text-align: center;
+`;
+
+const ToggleMode = styled.div`
+  text-align: center;
+  color: #666;
+`;
+
+const ToggleButton = styled.button`
+  background: none;
+  border: none;
+  color: #007bff;
+  cursor: pointer;
+  padding: 0;
+  
+  &:hover {
+    text-decoration: underline;
+  }
+`;

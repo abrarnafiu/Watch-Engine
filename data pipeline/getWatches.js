@@ -1,16 +1,16 @@
 import { OpenAI } from 'openai';  // Import OpenAI class
 import axios from 'axios';
-import { supabase } from './webapp/src/lib/supabaseClient.js';
+import { supabase } from '../webapp/src/lib/supabaseClient.js';
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
 
 // SETTINGS
-const MAKE_ID = 30;
+const MAKE_ID = 31;
 const LIMIT = 20;
 const TABLE_NAME = 'watches';
 const BASE_URL = 'https://watch-database1.p.rapidapi.com/watches/make';
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY, // Ensure your OpenAI API key is in the .env file
+  apiKey: process.env.OPENAI_API_KEY, // Change from import.meta.env to process.env
 });
 
 // Helper function to extract dial color from model name
@@ -47,7 +47,7 @@ async function fetchAndInsertAllPages() {
       method: 'GET',
       url,
       headers: {
-        'x-rapidapi-key': process.env.RAPIDAPI_KEY,
+        'x-rapidapi-key': process.env.RAPIDAPI_KEY, // Change from import.meta.env to process.env
         'x-rapidapi-host': 'watch-database1.p.rapidapi.com',
       }
     };
