@@ -24,7 +24,7 @@ const limiter = rateLimit({
 
 // CORS configuration
 const corsOptions = {
-  origin: 'http://localhost:5173',
+  origin: ['https://watch-engine.onrender.com', 'http://localhost:5173'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true

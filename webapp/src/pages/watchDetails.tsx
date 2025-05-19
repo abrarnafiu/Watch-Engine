@@ -40,6 +40,7 @@ const WatchDetails: React.FC = () => {
   const [lists, setLists] = useState<WatchList[]>([]);
   const [newListName, setNewListName] = useState("");
   const [showNewListInput, setShowNewListInput] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     const fetchWatch = async () => {
@@ -171,6 +172,16 @@ const WatchDetails: React.FC = () => {
     }
   };
 
+  // Convert HTTPS URLs to HTTP and handle errors
+  const getImageUrl = (url: string) => {
+    if (imageError || !url) return "/placeholder.jpg";
+    return url.replace('https://', 'http://');
+  };
+
+  const handleImageError = () => {
+    setImageError(true);
+  };
+
   if (loading) return <Loading>Loading...</Loading>;
   if (error) return <Error>{error}</Error>;
   if (!watch) return <Error>Watch not found</Error>;
@@ -181,7 +192,11 @@ const WatchDetails: React.FC = () => {
       <Content>
         <WatchContainer>
           <ImageSection>
-            <WatchImage src={watch.image_url || "/placeholder.jpg"} alt={watch.model_name} />
+            <WatchImage 
+              src={getImageUrl(watch.image_url)} 
+              alt={watch.model_name}
+              onError={handleImageError}
+            />
           </ImageSection>
           <DetailsSection>
             <Title>{watch.model_name}</Title>
