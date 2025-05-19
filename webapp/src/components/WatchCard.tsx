@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-export default function WatchCard({ watch, onRemove }: { watch: any, onRemove?: (id: string) => void }) {
+export default function WatchCard({ watch}: { watch: any, onRemove?: (id: string) => void }) {
   const [imageError, setImageError] = useState(false);
 
   const handleImageError = () => {
