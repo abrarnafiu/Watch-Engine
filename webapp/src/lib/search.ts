@@ -39,6 +39,48 @@ export interface SearchResult {
 
 export async function searchWatches(query: string): Promise<SearchResult[]> {
   try {
+    // Get the current user
+    const { data: { user }, error: userError } = await supabase.auth.getUser();
+    
+    if (userError) throw userError;
+
+    // If user is logged in, check their search limit
+    if (user) {
+      const today = new Date().toISOString().split('T')[0];
+      
+      // First, try to get the current search count
+      const { data: searchData, error: searchError } = await supabase
+        .from('user_searches')
+        .select('search_count')
+        .eq('user_id', user.id)
+        .eq('search_date', today)
+        .single();
+
+      if (searchError && searchError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        throw searchError;
+      }
+
+      const DAILY_SEARCH_LIMIT = 2; // Set your desired daily limit here
+      const currentCount = searchData?.search_count || 0;
+
+      if (currentCount >= DAILY_SEARCH_LIMIT) {
+        throw new Error(`You have reached your daily search limit of ${DAILY_SEARCH_LIMIT} searches. Please try again tomorrow.`);
+      }
+
+      // Update or insert the search count using a transaction
+      const { error: upsertError } = await supabase
+        .from('user_searches')
+        .upsert({
+          user_id: user.id,
+          search_date: today,
+          search_count: currentCount + 1
+        }, {
+          onConflict: 'user_id,search_date'
+        });
+
+      if (upsertError) throw upsertError;
+    }
+
     // Get schema for OpenAI analysis
     const { data: schemaData, error: schemaError } = await supabase
       .from('watches')

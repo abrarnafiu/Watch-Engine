@@ -174,9 +174,7 @@ export default function Home() {
     setWatches([]);
     
     try {
-      // Step 1: Analyze the query using OpenAI to extract searchable categories
       const criteria = await analyzeQuery(query);
-      console.log('Setting search criteria in state:', criteria);
       setSearchCriteria(criteria);
       
       // Step 2: Build a base query with all the search criteria
@@ -293,7 +291,12 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Search error:', err);
-      setError('Failed to search watches. Please try again.');
+      // Handle search limit error specifically
+      if (err instanceof Error && err.message.includes('daily search limit')) {
+        setError(err.message);
+      } else {
+        setError('Failed to search watches. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
