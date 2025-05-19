@@ -257,6 +257,12 @@ app.get('/api/proxy-image', async (req, res) => {
   }
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-}); 
+// Export the app for testing
+export default app;
+
+// Only start the server if this file is run directly
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+  });
+} 
