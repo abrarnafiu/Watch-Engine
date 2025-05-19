@@ -5,6 +5,8 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
+import https from 'https';
+import http from 'http';
 
 // Get the directory name in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -204,6 +206,54 @@ app.post('/api/search-watches', async (req, res) => {
       return errorResponse(res, 401, 'OpenAI API key is invalid');
     }
     return errorResponse(res, 500, 'Failed to search for watches', error);
+  }
+});
+
+// Image proxy endpoint
+app.get('/api/proxy-image', async (req, res) => {
+  const imageUrl = req.query.url;
+  
+  if (!imageUrl) {
+    return res.status(400).json({ error: 'Image URL is required' });
+  }
+
+  try {
+    // Parse the URL to ensure it's from our allowed domain
+    const url = new URL(imageUrl);
+    if (!url.hostname.includes('makingdatameaningful.com')) {
+      return res.status(400).json({ error: 'Invalid image source' });
+    }
+
+    // Always use HTTP for the image server
+    const proxyUrl = `http://${url.hostname}${url.pathname}${url.search}`;
+    
+    // Create a request to the image server
+    const request = http.get(proxyUrl, (response) => {
+      // Check if the response is successful
+      if (response.statusCode !== 200) {
+        return res.status(response.statusCode).json({ error: 'Failed to fetch image' });
+      }
+
+      // Set appropriate headers
+      res.set('Content-Type', response.headers['content-type']);
+      res.set('Cache-Control', 'public, max-age=86400'); // Cache for 24 hours
+      
+      // Pipe the image data directly to the response
+      response.pipe(res);
+    });
+
+    request.on('error', (error) => {
+      console.error('Error proxying image:', error);
+      res.status(500).json({ error: 'Failed to fetch image' });
+    });
+
+    // Handle client disconnect
+    req.on('close', () => {
+      request.destroy();
+    });
+  } catch (error) {
+    console.error('Error in image proxy:', error);
+    res.status(500).json({ error: 'Internal server error' });
   }
 });
 

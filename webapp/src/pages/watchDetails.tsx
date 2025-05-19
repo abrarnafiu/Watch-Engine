@@ -29,6 +29,8 @@ interface WatchList {
   created_at: string;
 }
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const WatchDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -172,10 +174,11 @@ const WatchDetails: React.FC = () => {
     }
   };
 
-  // Convert HTTPS URLs to HTTP and handle errors
+  // Get proxied image URL
   const getImageUrl = (url: string) => {
     if (imageError || !url) return "/placeholder.jpg";
-    return url.replace('https://', 'http://');
+    // Use the proxy endpoint
+    return `${API_URL}/api/proxy-image?url=${encodeURIComponent(url)}`;
   };
 
   const handleImageError = () => {
