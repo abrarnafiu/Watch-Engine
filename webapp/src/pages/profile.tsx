@@ -23,12 +23,14 @@ interface Watch {
   brand_id: number;
 }
 
+interface Favorite {
+  watch_id: string;
+}
+
 interface WatchList {
   id: string;
   name: string;
-  user_id: string;
-  created_at: string;
-  watches?: Watch[];
+  items: Watch[];
 }
 
 export default function Profile() {
@@ -115,7 +117,7 @@ export default function Profile() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const watchIds = data.map(fav => fav.watch_id);
+        const watchIds = data.map((fav: Favorite) => fav.watch_id);
         
         const { data: watchesData, error: watchesError } = await supabase
           .from('watches')
@@ -145,7 +147,7 @@ export default function Profile() {
       if (data) {
         // Fetch watches for each list
         const listsWithWatches = await Promise.all(
-          data.map(async (list) => {
+          data.map(async (list: WatchList) => {
             const { data: itemsData, error: itemsError } = await supabase
               .from('watch_list_items')
               .select('watch_id')
@@ -154,7 +156,7 @@ export default function Profile() {
             if (itemsError) throw itemsError;
 
             if (itemsData && itemsData.length > 0) {
-              const watchIds = itemsData.map(item => item.watch_id);
+              const watchIds = itemsData.map((item: Favorite) => item.watch_id);
               
               const { data: watchesData, error: watchesError } = await supabase
                 .from('watches')
@@ -165,13 +167,13 @@ export default function Profile() {
               
               return {
                 ...list,
-                watches: watchesData || []
+                items: watchesData || []
               };
             }
             
             return {
               ...list,
-              watches: []
+              items: []
             };
           })
         );
@@ -321,7 +323,7 @@ export default function Profile() {
     }
   };
 
-  const handleRemoveFromList = async (listId: string, watchId: string) => {
+  const removeFromList = async (listId: string, watchId: string) => {
     try {
       const { error } = await supabase
         .from('watch_list_items')
@@ -330,19 +332,21 @@ export default function Profile() {
         .eq('watch_id', watchId);
 
       if (error) throw error;
-      
+
       // Update local state
-      setLists(prev => prev.map(list => {
-        if (list.id === listId) {
-          return {
-            ...list,
-            watches: list.watches?.filter(watch => watch.id !== watchId) || []
-          };
-        }
-        return list;
-      }));
+      setLists(prevLists => 
+        prevLists.map(list => {
+          if (list.id === listId) {
+            return {
+              ...list,
+              items: list.items.filter(watch => watch.id !== watchId)
+            };
+          }
+          return list;
+        })
+      );
     } catch (error) {
-      console.error('Error removing from list:', error);
+      console.error('Error removing watch from list:', error);
     }
   };
 
@@ -666,7 +670,7 @@ export default function Profile() {
               </EmptyState>
             ) : (
               <ListsContainer>
-                {lists.map((list) => (
+                {lists.map((list: WatchList) => (
                   <ListCard key={list.id}>
                     <ListHeader>
                       <ListName>{list.name}</ListName>
@@ -676,9 +680,9 @@ export default function Profile() {
                         </ListActionButton>
                       </ListActions>
                     </ListHeader>
-                    {list.watches && list.watches.length > 0 ? (
+                    {list.items && list.items.length > 0 ? (
                       <ListWatches>
-                        {list.watches.map((watch) => (
+                        {list.items.map((watch: Watch) => (
                           <ListWatchItem key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
                             <ListWatchImage src={watch.image_url || "/placeholder.jpg"} alt={watch.model_name} />
                             <ListWatchInfo>
@@ -690,7 +694,7 @@ export default function Profile() {
                             <RemoveButton 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleRemoveFromList(list.id, watch.id);
+                                removeFromList(list.id, watch.id);
                               }}
                             >
                               ×

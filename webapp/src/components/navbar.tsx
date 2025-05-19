@@ -1,4 +1,4 @@
-import logo from 'webapp/src/assets/logo-placeholder-image.png';
+import logo from '../assets/logo-placeholder-image.png';
 
 export default function Navbar() {
   return (
