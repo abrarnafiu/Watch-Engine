@@ -1,9 +1,11 @@
 import { supabase } from './supabaseClient';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 // Utility function to call the analyze-query API endpoint
 async function analyzeQuery(query: string, schema: any) {
   try {
-    const response = await fetch('/api/analyze-query', {
+    const response = await fetch(`${API_URL}/api/analyze-query`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
