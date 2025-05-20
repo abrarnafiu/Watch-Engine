@@ -262,7 +262,7 @@ export default app;
 
 // Only start the server if this file is run directly
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-  });
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
+}); 
 } 

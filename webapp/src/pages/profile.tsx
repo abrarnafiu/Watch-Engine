@@ -332,17 +332,17 @@ export default function Profile() {
         .eq('watch_id', watchId);
 
       if (error) throw error;
-
+      
       // Update local state
       setLists(prevLists => 
         prevLists.map(list => {
-          if (list.id === listId) {
-            return {
-              ...list,
+        if (list.id === listId) {
+          return {
+            ...list,
               items: list.items.filter(watch => watch.id !== watchId)
-            };
-          }
-          return list;
+          };
+        }
+        return list;
         })
       );
     } catch (error) {

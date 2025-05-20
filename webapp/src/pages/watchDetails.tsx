@@ -49,30 +49,46 @@ const WatchDetails: React.FC = () => {
       if (!id) return;
 
       try {
+        setLoading(true);
+        setError(null);
+
         const { data, error } = await supabase
           .from("watches")
           .select("*")
           .eq("id", id)
-          .single();
+          .maybeSingle();
 
-        if (error) throw error;
+        if (error) {
+          console.error("Error fetching watch:", error);
+          throw error;
+        }
+
+        if (!data) {
+          setError("Watch not found");
+          return;
+        }
+
         setWatch(data);
 
         // Check if watch is in user's favorites
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-          const { data: favoriteData } = await supabase
+          const { data: favoriteData, error: favoriteError } = await supabase
             .from("favorites")
             .select("id")
             .eq("user_id", user.id)
             .eq("watch_id", id)
-            .single();
+            .maybeSingle();
           
-          setIsFavorite(!!favoriteData);
+          if (favoriteError) {
+            console.error("Error checking favorite status:", favoriteError);
+          } else {
+            setIsFavorite(!!favoriteData);
+          }
         }
       } catch (err) {
-        setError("Failed to load watch details.");
-        console.error("Error:", err);
+        console.error("Error in fetchWatch:", err);
+        setError("Failed to load watch details. Please try again.");
       } finally {
         setLoading(false);
       }

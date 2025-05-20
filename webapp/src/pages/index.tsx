@@ -295,7 +295,7 @@ export default function Home() {
       if (err instanceof Error && err.message.includes('daily search limit')) {
         setError(err.message);
       } else {
-        setError('Failed to search watches. Please try again.');
+      setError('Failed to search watches. Please try again.');
       }
     } finally {
       setLoading(false);

@@ -24,7 +24,8 @@ const BrandsPage: React.FC = () => {
         const { data, error } = await supabase
           .from("brands")
           .select("id, name")
-          .order("name");
+          .order("name")
+          .limit(1000);
 
         if (error) {
           console.error("Error fetching brands:", error);
@@ -32,9 +33,12 @@ const BrandsPage: React.FC = () => {
           return;
         }
 
-        if (data) {
-          setBrands(data);
+        if (!data || data.length === 0) {
+          setError("No brands found");
+          return;
         }
+
+        setBrands(data);
       } catch (err) {
         console.error("Error in fetchBrands:", err);
         setError("An unexpected error occurred. Please try again.");
