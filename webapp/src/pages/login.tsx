@@ -35,6 +35,7 @@ export default function Login() {
             access_type: 'offline',
             prompt: 'consent',
           },
+          skipBrowserRedirect: false
         }
       });
 
