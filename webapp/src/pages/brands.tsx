@@ -12,21 +12,34 @@ interface Brand {
 const BrandsPage: React.FC = () => {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchBrands = async () => {
-      const { data, error } = await supabase
-        .from("brands")
-        .select("id, name")
-        .order("name");
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const { data, error } = await supabase
+          .from("brands")
+          .select("id, name")
+          .order("name");
 
-      if (error) {
-        console.error("Error fetching brands:", error);
-        return;
-      }
+        if (error) {
+          console.error("Error fetching brands:", error);
+          setError("Failed to load brands. Please try again.");
+          return;
+        }
 
-      if (data) {
-        setBrands(data);
+        if (data) {
+          setBrands(data);
+        }
+      } catch (err) {
+        console.error("Error in fetchBrands:", err);
+        setError("An unexpected error occurred. Please try again.");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -43,6 +56,28 @@ const BrandsPage: React.FC = () => {
     acc[firstLetter].push(brand);
     return acc;
   }, {});
+
+  if (loading) {
+    return (
+      <Container>
+        <Navbar />
+        <Content>
+          <LoadingMessage>Loading brands...</LoadingMessage>
+        </Content>
+      </Container>
+    );
+  }
+
+  if (error) {
+    return (
+      <Container>
+        <Navbar />
+        <Content>
+          <ErrorMessage>{error}</ErrorMessage>
+        </Content>
+      </Container>
+    );
+  }
 
   return (
     <Container>
@@ -171,6 +206,24 @@ const Line = styled.div`
   flex: 1;
   height: 2px;
   background: linear-gradient(to right, #007bff, #e0e0e0);
+`;
+
+const LoadingMessage = styled.div`
+  text-align: center;
+  font-size: 1.2rem;
+  color: #666;
+  margin-top: 2rem;
+`;
+
+const ErrorMessage = styled.div`
+  text-align: center;
+  font-size: 1.2rem;
+  color: #dc3545;
+  margin-top: 2rem;
+  padding: 1rem;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
 `;
 
 export default BrandsPage;
