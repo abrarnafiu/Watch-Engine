@@ -8,6 +8,7 @@ import Login from './pages/login.tsx'
 import BrandPage from './pages/brandPage.tsx'
 import WatchDetails from './pages/watchDetails.tsx'
 import Profile from './pages/profile'
+import ProfileSetup from './pages/profile-setup'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { ProtectedRoute } from './components/ProtectedRoute'
@@ -28,6 +29,14 @@ createRoot(document.getElementById('root')!).render(
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
+            path="/profile-setup" 
+            element={
+              <ProtectedRoute>
+                <ProfileSetup />
               </ProtectedRoute>
             } 
           />

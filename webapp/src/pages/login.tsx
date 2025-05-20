@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Navbar from '../components/navbar';
 import styled from 'styled-components';
 import { supabase } from '../lib/supabaseClient';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -10,19 +10,43 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<'login' | 'signup'>('login');
+  const [googleLoading, setGoogleLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+    // Check if we have a mode parameter in the URL
+    const modeParam = searchParams.get('mode');
+    if (modeParam === 'signup') {
+      setMode('signup');
+    }
+  }, [searchParams]);
 
   const handleGoogleLogin = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      setGoogleLoading(true);
+      setError(null);
+      
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/profile-setup`
+          redirectTo: `${window.location.origin}/profile-setup`,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         }
       });
+
       if (error) throw error;
+      
+      // The redirect will happen automatically
+      // No need to navigate manually
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+      console.error('Google login error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to sign in with Google');
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -66,8 +90,19 @@ export default function Login() {
         <Form onSubmit={handleSubmit}>
           <Title>{mode === 'login' ? 'Login' : 'Sign Up'}</Title>
           
-          <GoogleButton type="button" onClick={handleGoogleLogin}>
-            Continue with Google
+          <GoogleButton 
+            type="button" 
+            onClick={handleGoogleLogin}
+            disabled={googleLoading}
+          >
+            {googleLoading ? (
+              <LoadingSpinner />
+            ) : (
+              <>
+                <GoogleIcon src="/google-icon.png" alt="Google" />
+                Continue with Google
+              </>
+            )}
           </GoogleButton>
           
           <Divider>or</Divider>
@@ -185,6 +220,11 @@ const GoogleButton = styled(Button)`
   &:hover {
     background-color: #f8f9fa;
   }
+
+  &:disabled {
+    background-color: #f8f9fa;
+    cursor: not-allowed;
+  }
 `;
 
 const Divider = styled.div`
@@ -233,5 +273,26 @@ const ToggleButton = styled.button`
   
   &:hover {
     text-decoration: underline;
+  }
+`;
+
+const GoogleIcon = styled.img`
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+`;
+
+const LoadingSpinner = styled.div`
+  width: 20px;
+  height: 20px;
+  border: 2px solid #f3f3f3;
+  border-top: 2px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-right: 8px;
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 `;
