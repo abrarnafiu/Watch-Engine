@@ -42,7 +42,7 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const [watches, setWatches] = useState<Watch[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | React.ReactNode | null>(null);
   const [searchCriteria, setSearchCriteria] = useState<SearchCriteria | null>(null);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [, setFilters] = useState<SearchCriteria>({});
@@ -291,11 +291,27 @@ export default function Home() {
       }
     } catch (err) {
       console.error('Search error:', err);
-      // Handle search limit error specifically
-      if (err instanceof Error && err.message.includes('daily search limit')) {
-        setError(err.message);
+      if (err instanceof Error) {
+        if (err.message.includes('daily search limit')) {
+          if (err.message.includes('Please sign up or log in')) {
+            setError(
+              <div>
+                {err.message}
+                <br />
+                <LoginPrompt>
+                  <LoginButton onClick={() => navigate('/login')}>Log In</LoginButton>
+                  <SignupButton onClick={() => navigate('/login?mode=signup')}>Sign Up</SignupButton>
+                </LoginPrompt>
+              </div>
+            );
+          } else {
+            setError(err.message);
+          }
+        } else {
+          setError('Failed to search watches. Please try again.');
+        }
       } else {
-      setError('Failed to search watches. Please try again.');
+        setError('An unexpected error occurred. Please try again.');
       }
     } finally {
       setLoading(false);
@@ -718,5 +734,40 @@ const LimitedEdition = styled.span`
   border-radius: 4px;
   font-size: 0.8rem;
   margin-left: 0.5rem;
+`;
+
+const LoginPrompt = styled.div`
+  margin-top: 1rem;
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+`;
+
+const LoginButton = styled.button`
+  padding: 0.5rem 1rem;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+
+  &:hover {
+    background-color: #0056b3;
+  }
+`;
+
+const SignupButton = styled.button`
+  padding: 0.5rem 1rem;
+  background-color: #28a745;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+
+  &:hover {
+    background-color: #218838;
+  }
 `;
 

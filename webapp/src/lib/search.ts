@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const ANONYMOUS_SEARCH_LIMIT = 3;
 
 // Utility function to call the analyze-query API endpoint
 async function analyzeQuery(query: string, schema: any) {
@@ -46,15 +47,14 @@ export async function searchWatches(query: string): Promise<SearchResult[]> {
     
     if (userError) throw userError;
 
-    // If user is logged in, check their search limit
-    if (user) {
-      const today = new Date().toISOString().split('T')[0];
-      
-      // First, try to get the current search count
+    const today = new Date().toISOString().split('T')[0];
+
+    if (!user) {
+      // Handle anonymous user search limit
       const { data: searchData, error: searchError } = await supabase
-        .from('user_searches')
+        .from('anonymous_searches')
         .select('search_count')
-        .eq('user_id', user.id)
+        .eq('ip_address', window.location.hostname) // Using hostname as a simple identifier
         .eq('search_date', today)
         .single();
 
@@ -62,14 +62,45 @@ export async function searchWatches(query: string): Promise<SearchResult[]> {
         throw searchError;
       }
 
-      const DAILY_SEARCH_LIMIT = 2; // Set your desired daily limit here
+      const currentCount = searchData?.search_count || 0;
+
+      if (currentCount >= ANONYMOUS_SEARCH_LIMIT) {
+        throw new Error(`You have reached your daily search limit of ${ANONYMOUS_SEARCH_LIMIT} searches. Please sign up or log in to continue searching.`);
+      }
+
+      // Update or insert the search count
+      const { error: upsertError } = await supabase
+        .from('anonymous_searches')
+        .upsert({
+          ip_address: window.location.hostname,
+          search_date: today,
+          search_count: currentCount + 1
+        }, {
+          onConflict: 'ip_address,search_date'
+        });
+
+      if (upsertError) throw upsertError;
+    } else {
+      // Handle authenticated user search limit
+      const { data: searchData, error: searchError } = await supabase
+        .from('user_searches')
+        .select('search_count')
+        .eq('user_id', user.id)
+        .eq('search_date', today)
+        .single();
+
+      if (searchError && searchError.code !== 'PGRST116') {
+        throw searchError;
+      }
+
+      const DAILY_SEARCH_LIMIT = 10; // Higher limit for authenticated users
       const currentCount = searchData?.search_count || 0;
 
       if (currentCount >= DAILY_SEARCH_LIMIT) {
         throw new Error(`You have reached your daily search limit of ${DAILY_SEARCH_LIMIT} searches. Please try again tomorrow.`);
       }
 
-      // Update or insert the search count using a transaction
+      // Update or insert the search count
       const { error: upsertError } = await supabase
         .from('user_searches')
         .upsert({
@@ -132,7 +163,7 @@ export async function searchWatches(query: string): Promise<SearchResult[]> {
       supabaseQuery = supabaseQuery.eq('brand_id', searchCriteria.brand_id);
     }
 
-    // Execute the category-based search
+    // Execute the query
     const { data: categoryResults, error: categoryError } = await supabaseQuery;
     if (categoryError) throw categoryError;
 
