@@ -615,7 +615,7 @@ const SearchTextarea = styled.textarea`
   box-shadow: 0 8px 32px rgba(0,0,0,0.1);
 
   &:focus {
-    border-color: #2196f3;
+    border-color:rgb(146, 173, 196);
     box-shadow: 0 8px 32px rgba(33, 150, 243, 0.3);
     transform: translateY(-2px);
   }
