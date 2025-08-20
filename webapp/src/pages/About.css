@@ -1,43 +1,88 @@
-/* General Styles */
+/* Modern dark theme matching Home page */
 .about-container {
-  font-family: 'Arial', sans-serif;
-  margin: 20px;
-  padding: 20px;
-  background-color: #f4f4f9;
+  font-family: 'Inter', sans-serif;
+  min-height: 100vh;
+  padding: 2rem;
+  background: radial-gradient(ellipse at top, #1a1a2e 0%, rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
+  background-attachment: fixed;
+  position: relative;
+  overflow: hidden;
+}
+
+.about-container::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  background: radial-gradient(circle at top center, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.15) 30%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  animation: fadeInLight 1.5s ease-in-out forwards;
+}
+
+@keyframes fadeInLight {
+  0% { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+/* Raise content above glow */
+.about-container .about-header,
+.about-container .about-content,
+.about-container .about-footer {
+  position: relative;
+  z-index: 1;
 }
 
 .about-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: 2.5rem;
 }
 
 .about-header h1 {
-  font-size: 2.5rem;
-  color: #333;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 700;
+  font-size: clamp(2rem, 4vw, 3rem);
+  margin: 0;
+  background: linear-gradient(135deg, rgb(103,166,218) 0%, rgb(122,178,224) 50%, rgb(82,139,185) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
 .about-content {
-  background-color: #fff;
-  border-radius: 8px;
-  padding: 30px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  max-width: 1000px;
+  margin: 0 auto;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
 .about-content h2 {
-  font-size: 1.75rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 600;
+  font-size: 1.5rem;
   color: #333;
-  margin-bottom: 20px;
+  margin: 1.5rem 0 1rem;
 }
 
 .about-content p {
-  font-size: 1.1rem;
-  line-height: 1.6;
+  font-size: 1.05rem;
+  line-height: 1.7;
   color: #555;
-  margin-bottom: 15px;
+  margin: 0 0 1rem 0;
 }
 
 .about-content a {
-  color: #007BFF;
+  color: #2196f3;
   text-decoration: none;
 }
 
@@ -45,14 +90,18 @@
   text-decoration: underline;
 }
 
-/* Footer Styles */
+/* Footer styled to match glass aesthetic */
 .about-footer {
+  max-width: 1000px;
+  margin: 2rem auto 0;
   text-align: center;
-  margin-top: 40px;
-  padding: 20px;
-  background-color: #333;
-  color: white;
-  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  color: #212529;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.12);
 }
 
 .about-footer p {

@@ -1,6 +1,7 @@
 import { useState, useRef} from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/navbar';
+import Footer from '../components/footer';
 import styled from 'styled-components';
 import { supabase } from '../lib/supabaseClient';
 import { API_URL } from '../config';
@@ -347,9 +348,13 @@ export default function Home() {
                 {loading ? 'Searching...' : 'Search Watches'}
               </SearchButton>
               <FilterButton 
+                aria-label={showAdvancedFilters ? 'Hide filters' : 'Show filters'}
+                title={showAdvancedFilters ? 'Hide filters' : 'Show filters'}
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
               >
-                {showAdvancedFilters ? 'Hide Filters' : 'Show Advanced Filters'}
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 5h18v2l-7 7v5l-4-2v-3L3 7V5z" />
+                </svg>
               </FilterButton>
             </ButtonContainer>
           </SearchBox>
@@ -480,7 +485,36 @@ export default function Home() {
             </WatchGrid>
           </ResultsSection>
         )}
+
+        {/* In-page About Section */}
+        <AboutSection id="about">
+          <AboutTitle>About Watch Engine</AboutTitle>
+          <AboutGrid>
+            <AboutCard>
+              <h3>What is this?</h3>
+              <p>
+                Watch Engine helps you discover the perfect watch using natural language search and
+                smart filters. Explore models, specs, prices, and more across many brands.
+              </p>
+            </AboutCard>
+            <AboutCard>
+              <h3>How it works</h3>
+              <p>
+                We combine structured filters with semantic search powered by embeddings to surface
+                relevant watches even from descriptive queries.
+              </p>
+            </AboutCard>
+            <AboutCard>
+              <h3>Our mission</h3>
+              <p>
+                Deliver a fast, modern, and delightful way to browse watches so you can focus on what
+                matters: finding your next timepiece.
+              </p>
+            </AboutCard>
+          </AboutGrid>
+        </AboutSection>
       </MainContent>
+      <Footer/>
     </Container>
   );
 }
@@ -488,7 +522,33 @@ export default function Home() {
 // Styled components
 const Container = styled.div`
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background: radial-gradient(ellipse at top, #1a1a2e 0%,rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
+  background-attachment: fixed;
+  position: relative;
+  overflow-x: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 100vh;
+    background: radial-gradient(circle at top center, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.15) 30%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0;
+    animation: fadeInLight 1.5s ease-in-out forwards;
+  }
+  
+  @keyframes fadeInLight {
+    0% {
+      opacity: 0;
+    }
+    100% {
+      opacity: 1;
+    }
+  }
 `;
 
 const MainContent = styled.div`
@@ -499,22 +559,37 @@ const MainContent = styled.div`
 
 const SearchSection = styled.div`
   text-align: center;
+  margin-top: 3rem;
   margin-bottom: 3rem;
-  background: white;
-  padding: 2rem;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
+  padding: 3rem 2rem;
+  border-radius: 20px;
+  box-shadow: 0 20px 40px rgba(255, 255, 255, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.7);
 `;
 
 const Title = styled.h1`
-  font-size: 2.5rem;
-  color: #333;
-  margin-bottom: 1rem;
+  font-size: 3.5rem;
+  font-weight: 200;
+  font-family: 'Montserrat', sans-serif;
+  color: rgb(255, 255, 255);
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 `;
 
-const Subtitle = styled.p`  color: #666;
-  font-size: 1.1rem;
-  margin-bottom: 2rem;
+const Subtitle = styled.p`
+  color:rgb(126, 136, 141);
+  font-size: 1rem;
+  font-weight: 400;
+  font-family: 'Inter', sans-serif;
+  margin-bottom: 2.5rem;
+  line-height: 1.6;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  letter-spacing: 0.01em;
 `;
 
 const SearchBox = styled.div`
@@ -524,18 +599,31 @@ const SearchBox = styled.div`
 
 const SearchTextarea = styled.textarea`
   width: 100%;
-  min-height: 60px;
-  padding: 1rem;
-  font-size: 1.1rem;
-  border: 2px solid #ddd;
-  border-radius: 10px;
-  margin-bottom: 1rem;
+  min-height: 80px;
+  padding: 1.5rem;
+  font-size: 1.2rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  border: 3px solid rgba(33, 150, 243, 0.2);
+  border-radius: 20px;
+  margin-bottom: 1.5rem;
   resize: none;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
 
   &:focus {
-    border-color: #007bff;
+    border-color: #2196f3;
+    box-shadow: 0 8px 32px rgba(33, 150, 243, 0.3);
+    transform: translateY(-2px);
+  }
+
+  &::placeholder {
+    color: #999;
+    font-style: italic;
+    font-weight: 300;
   }
 `;
 
@@ -543,46 +631,80 @@ const ButtonContainer = styled.div`
   display: flex;
   gap: 1rem;
   justify-content: center;
+  align-items: center;
 `;
 
 const SearchButton = styled.button<{ primary?: boolean }>`
-  padding: 1rem 2rem;
-  font-size: 1.1rem;
-  background-color: ${props => props.primary ? '#007bff' : '#6c757d'};
+  padding: 1.3rem 3rem;
+  font-size: 1.2rem;
+  min-height: 56px;
+  font-family: 'Inter', sans-serif;
+  font-weight: 300;
+  background: linear-gradient(135deg, #64b5f6 0%, #42a5f5 50%, #2196f3 100%);
   color: white;
   border: none;
-  border-radius: 8px;
+  border-radius: 28px;
   cursor: pointer;
-  transition: background-color 0.2s ease;
-  font-weight: 500;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(33, 150, 243, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 
   &:hover {
-    background-color: ${props => props.primary ? '#0056b3' : '#5a6268'};
+    transform: translateY(-3px);
+    box-shadow: 0 12px 35px rgba(33, 150, 243, 0.6);
+  }
+
+  &:active {
+    transform: translateY(-1px);
   }
 
   &:disabled {
-    background-color: #ccc;
+    background: #ccc;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
 `;
 
 const FilterButton = styled(SearchButton)`
-  background-color: #6c757d;
-  
+  padding: 0;
+  width: 56px;
+  height: 56px;
+  min-width: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+  box-shadow: 0 8px 20px rgba(108, 117, 125, 0.35);
+  text-transform: none;
+  letter-spacing: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+
+  svg {
+    width: 22px;
+    height: 22px;
+    fill: #fff;
+  }
+
   &:hover {
-    background-color: #5a6268;
+    box-shadow: 0 12px 28px rgba(108, 117, 125, 0.45);
+    transform: translateY(-2px) scale(1.05);
   }
 `;
 
 const FiltersContainer = styled.div`
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
+  gap: 1.5rem;
   margin-bottom: 2rem;
-  background: white;
-  padding: 1.5rem;
-  border-radius: 10px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
+  border-radius: 20px;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 `;
 
 const FilterGroup = styled.div`
@@ -592,8 +714,11 @@ const FilterGroup = styled.div`
 `;
 
 const FilterLabel = styled.label`
-  font-weight: 500;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
   color: #333;
+  font-size: 0.95rem;
+  letter-spacing: 0.01em;
 `;
 
 const FilterInput = styled.input`
@@ -601,6 +726,8 @@ const FilterInput = styled.input`
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 0.9rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
   
   &:focus {
     outline: none;
@@ -638,17 +765,22 @@ const ErrorMessage = styled.div`
 `;
 
 const SearchCriteriaDisplay = styled.div`
-  background: white;
-  padding: 1.5rem;
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
+  border-radius: 20px;
   margin-bottom: 2rem;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 `;
 
 const CriteriaTitle = styled.h3`
   margin: 0 0 1rem 0;
   color: #333;
   font-size: 1.2rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: 0.01em;
 `;
 
 const CriteriaList = styled.div`
@@ -667,8 +799,10 @@ const CriteriaItem = styled.div`
 
 const CriteriaKey = styled.span`
   font-weight: 600;
+  font-family: 'Inter', sans-serif;
   color: #495057;
   margin-right: 0.5rem;
+  font-size: 0.9rem;
 `;
 
 const CriteriaValue = styled.span`
@@ -677,12 +811,18 @@ const CriteriaValue = styled.span`
 
 const ResultsSection = styled.div`
   margin-top: 3rem;
+  margin-bottom: 4rem;
 `;
 
 const ResultsTitle = styled.h2`
-  font-size: 1.8rem;
-  color: #333;
-  margin-bottom: 1.5rem;
+  font-size: 2.2rem;
+  color: white;
+  margin-bottom: 2rem;
+  text-align: center;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  font-weight: 800;
+  font-family: 'Inter', sans-serif;
+  letter-spacing: -0.01em;
 `;
 
 const WatchGrid = styled.div`
@@ -692,16 +832,18 @@ const WatchGrid = styled.div`
 `;
 
 const WatchCard = styled.div`
-  background: white;
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  transition: transform 0.2s ease-in-out;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  transition: all 0.3s ease-in-out;
   cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.2);
 
   &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 25px 50px rgba(0,0,0,0.15);
   }
 `;
 
@@ -718,13 +860,19 @@ const WatchInfo = styled.div`
 const WatchTitle = styled.h3`
   margin: 0 0 0.5rem 0;
   font-size: 1.2rem;
+  font-weight: 600;
+  font-family: 'Inter', sans-serif;
   color: #333;
+  letter-spacing: 0.01em;
 `;
 
 const WatchDetails = styled.p`
   margin: 0.25rem 0;
   color: #666;
   font-size: 0.9rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 400;
+  line-height: 1.4;
 `;
 
 const LimitedEdition = styled.span`
@@ -768,6 +916,56 @@ const SignupButton = styled.button`
 
   &:hover {
     background-color: #218838;
+  }
+`;
+
+// About section styles matching theme
+const AboutSection = styled.section`
+  margin-top: 10rem;
+  margin-bottom: 6rem;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(10px);
+  padding: 2rem;
+  border-radius: 20px;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  scroll-margin-top: 80px;
+`;
+
+const AboutTitle = styled.h2`
+  font-size: 2rem;
+  font-weight: 700;
+  font-family: 'Montserrat', sans-serif;
+  margin: 0 0 1.5rem 0;
+  color: rgb(0, 0, 0);
+  background-clip: text;
+`;
+
+const AboutGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+`;
+
+const AboutCard = styled.div`
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 16px;
+  padding: 1.25rem;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+
+  h3 {
+    margin: 0 0 0.5rem 0;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
+    color: #333;
+  }
+
+  p {
+    margin: 0;
+    color: #555;
+    line-height: 1.6;
+    font-family: 'Inter', sans-serif;
   }
 `;
 
