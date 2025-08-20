@@ -491,24 +491,26 @@ export default function Home() {
           <AboutTitle>About Watch Engine</AboutTitle>
           <AboutGrid>
             <AboutCard>
-              <h3>What is this?</h3>
+              <h3>What is Watch Engine?</h3>
               <p>
-                Watch Engine helps you discover the perfect watch using natural language search and
-                smart filters. Explore models, specs, prices, and more across many brands.
+              The Watch Search Engine is a powerful platform that helps users discover the best watches available
+              on the market. With access to a vast database of watch brands and models, it allows users to search, 
+              compare, and explore watches based on their preferences.
               </p>
             </AboutCard>
             <AboutCard>
               <h3>How it works</h3>
               <p>
-                We combine structured filters with semantic search powered by embeddings to surface
-                relevant watches even from descriptive queries.
+              The platform aggregates data from various watch manufacturers' websites using web scraping techniques. 
+              Information such as brand, model, price, features, and images are collected and stored in a MongoDB 
+              database. This data is then made accessible via an intuitive user interface.
               </p>
             </AboutCard>
             <AboutCard>
               <h3>Our mission</h3>
               <p>
-                Deliver a fast, modern, and delightful way to browse watches so you can focus on what
-                matters: finding your next timepiece.
+                We aim to provide users with a fast and seamless experience when searching for watches, ensuring they 
+                have all the details they need to make an informed decision.
               </p>
             </AboutCard>
           </AboutGrid>
