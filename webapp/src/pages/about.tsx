@@ -2,7 +2,7 @@ import Navbar from '../components/navbar'
 import './About.css';  // Import the CSS file for styling
 export function About() {
   return (
-    <div>
+    <div className="about-page">
     <Navbar />
     <div className="about-container">
       

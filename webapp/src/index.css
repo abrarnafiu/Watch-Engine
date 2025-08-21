@@ -8,7 +8,6 @@ body, html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-  font-variation-settings: 'wght' 300;
   scroll-behavior: smooth;
   overflow-x: hidden;
 }

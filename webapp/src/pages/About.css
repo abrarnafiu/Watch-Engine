@@ -1,12 +1,16 @@
 /* Modern dark theme matching Home page */
-.about-container {
-  font-family: 'Inter', sans-serif;
+.about-page {
   min-height: 100vh;
-  padding: 2rem;
   background: radial-gradient(ellipse at top, #1a1a2e 0%, rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
   background-attachment: fixed;
   position: relative;
   overflow: hidden;
+}
+
+.about-container {
+  font-family: 'Inter', sans-serif;
+  padding: 2rem;
+  position: relative;
 }
 
 .about-container::before {

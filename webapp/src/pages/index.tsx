@@ -328,7 +328,7 @@ export default function Home() {
       <Navbar />
       <MainContent>
         <SearchSection>
-          <Title>Find Your Perfect Watch</Title>
+          <Title className="font-bold">Find Your Perfect <br /> Watch.</Title>
           <Subtitle>
             Describe the watch you're looking for in natural language, or use our advanced filters below.
             For example: "Find me a diving watch with a blue dial under $5000"
@@ -486,35 +486,7 @@ export default function Home() {
           </ResultsSection>
         )}
 
-        {/* In-page About Section */}
-        <AboutSection id="about">
-          <AboutTitle>About Watch Engine</AboutTitle>
-          <AboutGrid>
-            <AboutCard>
-              <h3>What is Watch Engine?</h3>
-              <p>
-              The Watch Search Engine is a powerful platform that helps users discover the best watches available
-              on the market. With access to a vast database of watch brands and models, it allows users to search, 
-              compare, and explore watches based on their preferences.
-              </p>
-            </AboutCard>
-            <AboutCard>
-              <h3>How it works</h3>
-              <p>
-              The platform aggregates data from various watch manufacturers' websites using web scraping techniques. 
-              Information such as brand, model, price, features, and images are collected and stored in a MongoDB 
-              database. This data is then made accessible via an intuitive user interface.
-              </p>
-            </AboutCard>
-            <AboutCard>
-              <h3>Our mission</h3>
-              <p>
-                We aim to provide users with a fast and seamless experience when searching for watches, ensuring they 
-                have all the details they need to make an informed decision.
-              </p>
-            </AboutCard>
-          </AboutGrid>
-        </AboutSection>
+        
       </MainContent>
       <Footer/>
     </Container>
@@ -554,26 +526,21 @@ const Container = styled.div`
 `;
 
 const MainContent = styled.div`
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
 `;
 
 const SearchSection = styled.div`
   text-align: center;
-  margin-top: 3rem;
+  margin-top: 0rem;
   margin-bottom: 3rem;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
   padding: 3rem 2rem;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(255, 255, 255, 0.25);
-  border: 2px solid rgba(255, 255, 255, 0.7);
 `;
 
 const Title = styled.h1`
-  font-size: 3.5rem;
-  font-weight: 200;
+  font-size: 4.5rem;
+  font-weight: 600;
   font-family: 'Montserrat', sans-serif;
   color: rgb(255, 255, 255);
   margin-bottom: 1.5rem;
@@ -584,7 +551,7 @@ const Title = styled.h1`
 const Subtitle = styled.p`
   color:rgb(126, 136, 141);
   font-size: 1rem;
-  font-weight: 400;
+  font-weight: 200;
   font-family: 'Inter', sans-serif;
   margin-bottom: 2.5rem;
   line-height: 1.6;
@@ -597,35 +564,38 @@ const Subtitle = styled.p`
 const SearchBox = styled.div`
   max-width: 800px;
   margin: 0 auto;
+  font-weight: 200;
 `;
 
 const SearchTextarea = styled.textarea`
   width: 100%;
   min-height: 80px;
   padding: 1.5rem;
-  font-size: 1.2rem;
-  font-family: 'Inter', sans-serif;
-  font-weight: 400;
-  border: 3px solid rgba(33, 150, 243, 0.2);
+  font-size: 1.1rem;
+  font-family: 'Droid Sans', sans-serif;
+  font-weight: 300;
+  border: 1px solid rgba(255, 255, 255, 0.62);
   border-radius: 20px;
   margin-bottom: 1.5rem;
   resize: none;
   outline: none;
   transition: all 0.3s ease;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
-
-  &:focus {
-    border-color:rgb(146, 173, 196);
-    box-shadow: 0 8px 32px rgba(33, 150, 243, 0.3);
-    transform: translateY(-2px);
-  }
+  box-shadow: 0 10px 20px rgba(255, 255, 255, 0.23);
+  color: white;
 
   &::placeholder {
-    color: #999;
+    color: rgba(189, 189, 189, 0.49);
     font-style: italic;
-    font-weight: 300;
+    font-weight: 200;
+  }
+
+  &:focus {
+    border-color: rgba(255, 255, 255, 0.7);
+    box-shadow: 0 20px 40px rgba(255, 255, 255, 0.35);
+    transform: translateY(-2px);
+    background: rgba(255, 255, 255, 0.15);
   }
 `;
 
@@ -638,23 +608,38 @@ const ButtonContainer = styled.div`
 
 const SearchButton = styled.button<{ primary?: boolean }>`
   padding: 1.3rem 3rem;
-  font-size: 1.2rem;
+  font-size: 1rem;
   min-height: 56px;
   font-family: 'Inter', sans-serif;
   font-weight: 300;
-  background: linear-gradient(135deg, #64b5f6 0%, #42a5f5 50%, #2196f3 100%);
+  background: linear-gradient(135deg, #4a90e2 0%, #87ceeb 100%);
   color: white;
   border: none;
   border-radius: 28px;
   cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 8px 25px rgba(33, 150, 243, 0.4);
+  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 25px rgba(74, 144, 226, 0.4);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  position: relative;
+  overflow: hidden;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #666;
+    opacity: 0;
+    transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 1;
+  }
 
   &:hover {
     transform: translateY(-3px);
-    box-shadow: 0 12px 35px rgba(33, 150, 243, 0.6);
+    box-shadow: 0 12px 35px rgba(74, 144, 226, 0.6);
   }
 
   &:active {
@@ -662,10 +647,19 @@ const SearchButton = styled.button<{ primary?: boolean }>`
   }
 
   &:disabled {
-    background: #ccc;
+    color: #333;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
+
+    &::before {
+      opacity: .8;
+    }
+
+    > * {
+      position: relative;
+      z-index: 2;
+    }
   }
 `;
 
@@ -921,53 +915,5 @@ const SignupButton = styled.button`
   }
 `;
 
-// About section styles matching theme
-const AboutSection = styled.section`
-  margin-top: 10rem;
-  margin-bottom: 6rem;
-  background: rgba(255, 255, 255, 0.98);
-  backdrop-filter: blur(10px);
-  padding: 2rem;
-  border-radius: 20px;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  scroll-margin-top: 80px;
-`;
 
-const AboutTitle = styled.h2`
-  font-size: 2rem;
-  font-weight: 700;
-  font-family: 'Montserrat', sans-serif;
-  margin: 0 0 1.5rem 0;
-  color: rgb(0, 0, 0);
-  background-clip: text;
-`;
-
-const AboutGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 1rem;
-`;
-
-const AboutCard = styled.div`
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 16px;
-  padding: 1.25rem;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-
-  h3 {
-    margin: 0 0 0.5rem 0;
-    font-family: 'Inter', sans-serif;
-    font-weight: 600;
-    color: #333;
-  }
-
-  p {
-    margin: 0;
-    color: #555;
-    line-height: 1.6;
-    font-family: 'Inter', sans-serif;
-  }
-`;
 

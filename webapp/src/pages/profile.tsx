@@ -721,73 +721,94 @@ export default function Profile() {
 // Styled Components
 const Container = styled.div`
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background: radial-gradient(ellipse at top, #1a1a2e 0%,rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
+  font-family: 'Montserrat', sans-serif;
 `;
 
 const Content = styled.div`
-  max-width: 1200px;
+  max-width: 1400px;
   margin: 0 auto;
   padding: 2rem;
 `;
 
 const ProfileHeader = styled.div`
   position: relative;
-  margin-bottom: 2rem;
-  background: white;
-  border-radius: 12px;
+  margin-bottom: 3rem;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 24px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 `;
 
 const Banner = styled.div`
-  height: 200px;
-  background: linear-gradient(45deg, #1a1a1a, #333);
+  height: 240px;
+  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
+  position: relative;
+  
+  &::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 100%);
+  }
 `;
 
 const ProfileInfo = styled.div`
   display: flex;
   align-items: flex-end;
-  gap: 2rem;
-  padding: 0 2rem;
-  margin-top: -50px;
+  gap: 2.5rem;
+  padding: 0 3rem 2rem;
+  margin-top: -60px;
   position: relative;
 `;
 
 const ProfilePicture = styled.div`
   position: relative;
-  width: 150px;
-  height: 150px;
+  width: 180px;
+  height: 180px;
 `;
 
 const ProfileImage = styled.img`
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  border: 4px solid white;
+  border: 6px solid white;
   object-fit: cover;
   background-color: #f0f0f0;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+  transition: transform 0.3s ease;
+  
+  &:hover {
+    transform: scale(1.05);
+  }
 `;
 
 const EditProfilePictureButton = styled.button`
   position: absolute;
-  bottom: 0;
-  right: 0;
-  width: 40px;
-  height: 40px;
+  bottom: 8px;
+  right: 8px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background-color: #007bff;
+  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
   border: none;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 1.2rem;
-  transition: background-color 0.2s;
+  font-size: 1.4rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
 
   &:hover {
-    background-color: #0056b3;
+    transform: scale(1.1);
+    box-shadow: 0 12px 25px rgba(0,0,0,0.3);
   }
 `;
 
@@ -798,153 +819,239 @@ const EditIcon = styled.span`
 `;
 
 const ProfileDetails = styled.div`
-  margin-bottom: 1rem;
+  margin-bottom: 1.5rem;
   flex: 1;
 `;
 
 const Name = styled.h2`
   margin: 0;
-  font-size: 2rem;
-  color: #333;
+  font-size: 2.5rem;
+  font-weight: 300;
+  color: #2d3748;
+  font-family: 'Montserrat', sans-serif;
+  letter-spacing: -0.02em;
 `;
 
 const Bio = styled.p`
-  margin: 0.5rem 0 0;
-  color: #666;
-  font-size: 1rem;
+  margin: 0.8rem 0 0;
+  color: #718096;
+  font-size: 1.1rem;
+  font-weight: 300;
+  font-family: 'Montserrat', sans-serif;
+  line-height: 1.6;
+  max-width: 500px;
 `;
 
 const LogoutButton = styled.button`
   position: absolute;
-  top: 1rem;
-  right: 1rem;
-  padding: 0.5rem 1rem;
-  background-color: #dc3545;
+  top: 1.5rem;
+  right: 1.5rem;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 12px;
   cursor: pointer;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 20px rgba(238, 90, 36, 0.3);
 
   &:hover {
-    background-color: #c82333;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgba(238, 90, 36, 0.4);
   }
 `;
 
 const TabsContainer = styled.div`
   display: flex;
-  margin-bottom: 2rem;
-  background: white;
-  border-radius: 8px;
+  margin-bottom: 3rem;
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 `;
 
 const Tab = styled.button<{ active: boolean }>`
   flex: 1;
-  padding: 1rem;
-  background-color: ${props => props.active ? '#007bff' : 'white'};
-  color: ${props => props.active ? 'white' : '#333'};
+  padding: 1.25rem 1.5rem;
+  background: ${props => props.active ? 'linear-gradient(135deg, #667eea 0%, #ffffff 100%)' : 'transparent'};
+  color: ${props => props.active ? 'white' : '#4a5568'};
   border: none;
   cursor: pointer;
   font-size: 1rem;
   font-weight: 500;
-  transition: all 0.2s;
+  font-family: 'Montserrat', sans-serif;
+  transition: all 0.3s ease;
+  position: relative;
 
   &:hover {
-    background-color: ${props => props.active ? '#0056b3' : '#f0f0f0'};
+    background: ${props => props.active ? 'linear-gradient(135deg, #667eea 0%, #ffffff 100%)' : 'rgba(102, 126, 234, 0.1)'};
+    color: ${props => props.active ? 'white' : '#667eea'};
+  }
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: ${props => props.active ? '60%' : '0%'};
+    height: 3px;
+    background: ${props => props.active ? 'white' : 'transparent'};
+    transition: width 0.3s ease;
   }
 `;
 
 const PreferencesForm = styled.div`
-  background: white;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  padding: 3rem;
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 2rem;
 `;
 
 const SectionHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 1.5rem;
+  margin-bottom: 2rem;
+  padding-bottom: 1rem;
+  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
 `;
 
 const SectionTitle = styled.h2`
-  color: #333;
-  font-size: 1.5rem;
+  color: #2d3748;
+  font-size: 1.8rem;
   margin: 0 0 1.5rem 0;
+  font-weight: 400;
+  font-family: 'Montserrat', sans-serif;
+  letter-spacing: -0.01em;
 `;
 
 const PriceRangeContainer = styled.div`
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
+  background: rgba(102, 126, 234, 0.05);
+  padding: 2rem;
+  border-radius: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.1);
 `;
 
 const PriceInput = styled.input`
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  width: 150px;
+  padding: 1rem 1.5rem;
+  border: 2px solid rgba(102, 126, 234, 0.2);
+  border-radius: 12px;
+  width: 180px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  background: white;
+
+  &:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  }
+
+  &::placeholder {
+    color: #a0aec0;
+    font-weight: 400;
+  }
 `;
 
 const OptionsGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.5rem;
+  background: rgba(102, 126, 234, 0.02);
+  padding: 2rem;
+  border-radius: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.05);
 `;
 
 const ColorGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 1rem;
+  background: rgba(102, 126, 234, 0.02);
+  padding: 2rem;
+  border-radius: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.05);
 `;
 
 const ColorOption = styled.div<{ selected: boolean }>`
-  padding: 0.5rem;
+  padding: 1rem 0.75rem;
   text-align: center;
-  border: 2px solid ${props => props.selected ? '#007bff' : '#ddd'};
-  border-radius: 4px;
+  border: 2px solid ${props => props.selected ? '#667eea' : 'rgba(102, 126, 234, 0.2)'};
+  border-radius: 12px;
   cursor: pointer;
-  background-color: ${props => props.selected ? '#e6f3ff' : 'white'};
+  background: ${props => props.selected ? 'linear-gradient(135deg, #667eea 0%, #ffffff 100%)' : 'white'};
+  color: ${props => props.selected ? 'white' : '#4a5568'};
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+  box-shadow: ${props => props.selected ? '0 8px 20px rgba(102, 126, 234, 0.3)' : '0 2px 8px rgba(0,0,0,0.05)'};
 
   &:hover {
-    border-color: #007bff;
+    border-color: #667eea;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
   }
 `;
 
 const SaveButton = styled.button`
-  padding: 0.8rem 1.5rem;
-  background-color: #007bff;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 12px;
   cursor: pointer;
   font-size: 1rem;
+  font-weight: 500;
+  font-family: 'Montserrat', sans-serif;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
 
   &:hover {
-    background-color: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgba(102, 126, 234, 0.4);
   }
 
   &:disabled {
-    background-color: #ccc;
+    background: #cbd5e0;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
   }
 `;
 
 const Loading = styled.div`
   text-align: center;
-  padding: 2rem;
-  font-size: 1.2rem;
-  color: #666;
+  padding: 4rem 2rem;
+  font-size: 1.4rem;
+  color: #a0aec0;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
 `;
 
 const ErrorMessage = styled.div`
-  color: #dc3545;
-  background-color: #f8d7da;
-  padding: 1rem;
-  border-radius: 4px;
-  margin-bottom: 1rem;
+  color: #e53e3e;
+  background: rgba(229, 62, 62, 0.1);
+  padding: 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  border: 1px solid rgba(229, 62, 62, 0.2);
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
 `;
 
 interface CheckboxProps {
@@ -968,69 +1075,109 @@ const Checkbox = ({ checked, onChange, label }: CheckboxProps) => (
 const CheckboxContainer = styled.div`
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid rgba(102, 126, 234, 0.1);
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
+  }
 
   input[type="checkbox"] {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
+    accent-color: #667eea;
   }
 
   label {
     cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 500;
+    color: #4a5568;
+    font-size: 0.95rem;
   }
 `;
 
 const EditButton = styled.button`
-  padding: 0.5rem 1rem;
-  background-color: #007bff;
+  padding: 0.75rem 1.5rem;
+  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 12px;
   cursor: pointer;
   align-self: flex-start;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: 0.95rem;
+  transition: all 0.3s ease;
+  box-shadow: 0 6px 15px rgba(102, 126, 234, 0.3);
 
   &:hover {
-    background-color: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
   }
 `;
 
 const ButtonGroup = styled.div`
   display: flex;
-  gap: 1rem;
-  margin-top: 1rem;
+  gap: 1.5rem;
+  margin-top: 2rem;
+  justify-content: center;
 `;
 
 const CancelButton = styled.button`
-  padding: 0.8rem 1.5rem;
-  background-color: #6c757d;
+  padding: 1rem 2rem;
+  background: #718096;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 12px;
   cursor: pointer;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  transition: all 0.3s ease;
 
   &:hover {
-    background-color: #5a6268;
+    background: #4a5568;
+    transform: translateY(-2px);
   }
 `;
 
 const Section = styled.div`
-  margin-bottom: 2rem;
+  margin-bottom: 3rem;
+  padding: 2rem;
+  background: rgba(102, 126, 234, 0.02);
+  border-radius: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.05);
 `;
 
 const PreferencesDisplay = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1rem;
-  background: #f8f9fa;
-  border-radius: 8px;
+  gap: 1.5rem;
+  padding: 2rem;
+  background: rgba(102, 126, 234, 0.02);
+  border-radius: 16px;
+  border: 1px solid rgba(102, 126, 234, 0.1);
 `;
 
 const PreferenceItem = styled.div`
   display: flex;
-  gap: 1rem;
-  padding: 0.5rem;
-  border-bottom: 1px solid #e9ecef;
+  gap: 1.5rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+  background: white;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    background: rgba(102, 126, 234, 0.05);
+    transform: translateX(8px);
+  }
   
   &:last-child {
     border-bottom: none;
@@ -1038,13 +1185,18 @@ const PreferenceItem = styled.div`
 `;
 
 const Label = styled.span`
-  font-weight: 600;
-  color: #495057;
-  min-width: 120px;
+  font-weight: 500;
+  color: #4a5568;
+  min-width: 140px;
+  font-family: 'Montserrat', sans-serif;
+  font-size: 0.95rem;
 `;
 
 const Value = styled.span`
-  color: #212529;
+  color: #2d3748;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: 0.95rem;
 `;
 
 const ModalOverlay = styled.div`
@@ -1053,88 +1205,104 @@ const ModalOverlay = styled.div`
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0,0,0,0.5);
+  background-color: rgba(0,0,0,0.6);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
+  backdrop-filter: blur(10px);
 `;
 
 const Modal = styled.div`
   background: white;
-  border-radius: 10px;
+  border-radius: 20px;
   width: 90%;
-  max-width: 500px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  max-width: 600px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 `;
 
 const ModalHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  border-bottom: 1px solid #eee;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+  background: rgba(102, 126, 234, 0.02);
+  border-radius: 20px 20px 0 0;
 `;
 
 const ModalTitle = styled.h3`
   margin: 0;
-  color: #333;
+  color: #2d3748;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: 1.4rem;
 `;
 
 const CloseButton = styled.button`
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 1.8rem;
   cursor: pointer;
-  color: #666;
+  color: #718096;
   padding: 0;
   line-height: 1;
+  transition: color 0.3s ease;
+  font-family: 'Montserrat', sans-serif;
 
   &:hover {
-    color: #333;
+    color: #4a5568;
   }
 `;
 
 const ModalContent = styled.div`
-  padding: 2rem;
+  padding: 2.5rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1rem;
+  gap: 1.5rem;
 `;
 
 const UploadArea = styled.div`
   width: 100%;
-  height: 200px;
-  border: 2px dashed #ccc;
-  border-radius: 8px;
+  height: 240px;
+  border: 3px dashed rgba(102, 126, 234, 0.3);
+  border-radius: 16px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: all 0.3s ease;
+  background: rgba(102, 126, 234, 0.02);
 
   &:hover {
-    border-color: #007bff;
+    border-color: #667eea;
+    background: rgba(102, 126, 234, 0.05);
+    transform: scale(1.02);
   }
 `;
 
 const UploadIcon = styled.span`
-  font-size: 3rem;
+  font-size: 4rem;
   margin-bottom: 1rem;
 `;
 
 const UploadText = styled.p`
   margin: 0;
-  font-size: 1.2rem;
-  color: #333;
+  font-size: 1.3rem;
+  color: #2d3748;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 400;
 `;
 
 const UploadSubtext = styled.p`
   margin: 0;
-  font-size: 0.9rem;
-  color: #666;
+  font-size: 1rem;
+  color: #718096;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 400;
 `;
 
 const HiddenInput = styled.input`
@@ -1143,188 +1311,219 @@ const HiddenInput = styled.input`
 
 const ImagePreview = styled.img`
   max-width: 100%;
-  max-height: 300px;
+  max-height: 350px;
   object-fit: contain;
-  border-radius: 8px;
+  border-radius: 16px;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
 `;
 
 const FavoritesSection = styled.div`
-  background: white;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  padding: 3rem;
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-bottom: 2rem;
 `;
 
 const WatchGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1.5rem;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 2rem;
 `;
 
 const WatchCard = styled.div`
   background: white;
-  border-radius: 8px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  transition: transform 0.2s ease-in-out;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  transition: all 0.3s ease-in-out;
   cursor: pointer;
   position: relative;
+  border: 1px solid rgba(102, 126, 234, 0.1);
 
   &:hover {
-    transform: translateY(-5px);
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    border-color: rgba(102, 126, 234, 0.3);
   }
 `;
 
 const WatchImage = styled.img`
   width: 100%;
-  height: 180px;
+  height: 200px;
   object-fit: cover;
 `;
 
 const WatchInfo = styled.div`
-  padding: 1rem;
+  padding: 1.5rem;
 `;
 
 const ModelName = styled.h3`
   margin: 0;
-  color: #333;
-  font-size: 1.1rem;
+  color: #2d3748;
+  font-size: 1.2rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  letter-spacing: -0.01em;
 `;
 
 const FamilyName = styled.p`
-  color: #666;
+  color: #718096;
   margin: 0.5rem 0;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
 `;
 
 const Details = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-top: 0.5rem;
+  margin-top: 1rem;
+  align-items: center;
 `;
 
 const Year = styled.span`
-  color: #666;
+  color: #718096;
   font-size: 0.9rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
 `;
 
 const Price = styled.span`
-  color: #28a745;
-  font-weight: bold;
-  font-size: 0.9rem;
+  color: #38a169;
+  font-weight: 700;
+  font-size: 1rem;
+  font-family: 'Montserrat', sans-serif;
 `;
 
 const RemoveButton = styled.button`
   position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  width: 24px;
-  height: 24px;
+  top: 0.75rem;
+  right: 0.75rem;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background-color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.95);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 1.4rem;
   cursor: pointer;
-  color: #dc3545;
-  transition: all 0.2s;
+  color: #e53e3e;
+  transition: all 0.3s ease;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
 
   &:hover {
-    background-color: #dc3545;
+    background: #e53e3e;
     color: white;
+    transform: scale(1.1);
   }
 `;
 
 const ListsSection = styled.div`
-  background: white;
-  padding: 2rem;
-  border-radius: 12px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  padding: 3rem;
+  border-radius: 24px;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 `;
 
 const ListsContainer = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 2rem;
 `;
 
 const ListCard = styled.div`
-  background: #f8f9fa;
-  border-radius: 8px;
+  background: rgba(102, 126, 234, 0.02);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  border: 1px solid rgba(102, 126, 234, 0.1);
 `;
 
 const ListHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1rem;
-  background: #e9ecef;
+  padding: 1.5rem 2rem;
+  background: rgba(102, 126, 234, 0.05);
+  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
 `;
 
 const ListName = styled.h3`
   margin: 0;
-  color: #333;
-  font-size: 1.2rem;
+  color: #2d3748;
+  font-size: 1.3rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
 `;
 
 const ListActions = styled.div`
   display: flex;
-  gap: 0.5rem;
+  gap: 0.75rem;
 `;
 
 const ListActionButton = styled.button`
   background: none;
   border: none;
   cursor: pointer;
-  font-size: 1.2rem;
-  padding: 0.3rem;
-  border-radius: 4px;
-  transition: background-color 0.2s;
+  font-size: 1.3rem;
+  padding: 0.5rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
 
   &:hover {
-    background-color: rgba(0, 0, 0, 0.1);
+    background: rgba(229, 62, 62, 0.1);
+    transform: scale(1.1);
   }
 `;
 
 const ListWatches = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
-  padding: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1.5rem;
+  padding: 2rem;
 `;
 
 const ListWatchItem = styled.div`
   background: white;
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  transition: transform 0.2s ease-in-out;
+  box-shadow: 0 6px 15px rgba(0,0,0,0.1);
+  transition: all 0.3s ease-in-out;
   cursor: pointer;
   position: relative;
+  border: 1px solid rgba(102, 126, 234, 0.1);
 
   &:hover {
     transform: translateY(-5px);
+    box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+    border-color: rgba(102, 126, 234, 0.3);
   }
 `;
 
 const ListWatchImage = styled.img`
   width: 100%;
-  height: 120px;
+  height: 140px;
   object-fit: cover;
 `;
 
 const ListWatchInfo = styled.div`
-  padding: 0.8rem;
+  padding: 1rem;
 `;
 
 const ListWatchName = styled.h4`
   margin: 0;
-  color: #333;
-  font-size: 0.9rem;
+  color: #2d3748;
+  font-size: 1rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1333,13 +1532,15 @@ const ListWatchName = styled.h4`
 const ListWatchDetails = styled.div`
   display: flex;
   justify-content: space-between;
-  margin-top: 0.3rem;
+  margin-top: 0.5rem;
+  align-items: center;
 `;
 
 const ListWatchPrice = styled.span`
-  color: #28a745;
-  font-weight: bold;
-  font-size: 0.8rem;
+  color: #38a169;
+  font-weight: 700;
+  font-size: 0.9rem;
+  font-family: 'Montserrat', sans-serif;
 `;
 
 const EmptyState = styled.div`
@@ -1347,42 +1548,52 @@ const EmptyState = styled.div`
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 3rem;
+  padding: 4rem 3rem;
   text-align: center;
 `;
 
 const EmptyIcon = styled.div`
-  font-size: 3rem;
-  margin-bottom: 1rem;
-`;
-
-const EmptyText = styled.p`
-  color: #666;
-  font-size: 1.1rem;
+  font-size: 4rem;
   margin-bottom: 1.5rem;
 `;
 
+const EmptyText = styled.p`
+  color: #718096;
+  font-size: 1.2rem;
+  margin-bottom: 2rem;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  line-height: 1.6;
+`;
+
 const BrowseButton = styled.button`
-  padding: 0.8rem 1.5rem;
-  background-color: #007bff;
+  padding: 1rem 2rem;
+  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 12px;
   cursor: pointer;
   font-size: 1rem;
+  font-weight: 500;
+  font-family: 'Montserrat', sans-serif;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
 
   &:hover {
-    background-color: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 12px 25px rgba(102, 126, 234, 0.4);
   }
 `;
 
 const EmptyListState = styled.div`
-  padding: 2rem;
+  padding: 3rem;
   text-align: center;
 `;
 
 const EmptyListText = styled.p`
-  color: #666;
-  font-size: 1rem;
+  color: #718096;
+  font-size: 1.1rem;
   margin: 0;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
 `; 
