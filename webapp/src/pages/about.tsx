@@ -1,6 +1,6 @@
 import Navbar from '../components/navbar'  
 import './About.css';  // Import the CSS file for styling
-export function About() {
+export default function About() {
   return (
     <div className="about-page">
     <Navbar />
@@ -8,7 +8,7 @@ export function About() {
       
       <header className="about-header">
       <h1>About Watch Search Engine</h1>
-    </header>
+      </header>
 
     <section className="about-content">
       <h2>What is the Watch Search Engine?</h2>
@@ -44,5 +44,3 @@ export function About() {
   </div>
   );
 }
-
-export default About;
