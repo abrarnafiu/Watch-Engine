@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../components/navbar";
 import styled from "styled-components";
 import { supabase } from "../lib/supabaseClient";
+import { getImageUrl } from "../lib/imageUtils";
 
 interface Watch {
   id: string;
@@ -114,7 +115,7 @@ const BrandPage: React.FC = () => {
               {watches.map((watch) => (
                 <WatchCard key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
                   <WatchImage
-                    src={watch.image_url || "/placeholder.jpg"}
+                    src={getImageUrl(watch.image_url)}
                     alt={watch.model_name}
                   />
                   <WatchInfo>

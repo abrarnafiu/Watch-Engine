@@ -5,6 +5,7 @@ import Footer from '../components/footer';
 import styled from 'styled-components';
 import { supabase } from '../lib/supabaseClient';
 import { API_URL } from '../config';
+import { getImageUrl } from '../lib/imageUtils';
 
 interface Watch {
   id: string;
@@ -466,7 +467,7 @@ export default function Home() {
             <WatchGrid>
               {watches.map((watch) => (
                 <WatchCard key={watch.id} onClick={() => handleWatchClick(watch.id)}>
-                  <WatchImage src={watch.image_url || "/placeholder.jpg"} alt={watch.model_name} />
+                  <WatchImage src={getImageUrl(watch.image_url)} alt={watch.model_name} />
                   <WatchInfo>
                     <WatchTitle>
                       {watch.model_name}

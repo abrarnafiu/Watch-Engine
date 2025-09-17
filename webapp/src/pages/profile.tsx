@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import Navbar from '../components/navbar';
 import styled from 'styled-components';
 import type { WatchPreferences } from '../types/supabase';
+import { getImageUrl } from '../lib/imageUtils';
 
 interface Watch {
   id: string;
@@ -635,7 +636,7 @@ export default function Profile() {
               <WatchGrid>
                 {favorites.map((watch) => (
                   <WatchCard key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
-                    <WatchImage src={watch.image_url || "/placeholder.jpg"} alt={watch.model_name} />
+                    <WatchImage src={getImageUrl(watch.image_url)} alt={watch.model_name} />
                     <WatchInfo>
                       <ModelName>{watch.model_name}</ModelName>
                       <FamilyName>{watch.family_name}</FamilyName>
@@ -684,7 +685,7 @@ export default function Profile() {
                       <ListWatches>
                         {list.items.map((watch: Watch) => (
                           <ListWatchItem key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
-                            <ListWatchImage src={watch.image_url || "/placeholder.jpg"} alt={watch.model_name} />
+                            <ListWatchImage src={getImageUrl(watch.image_url)} alt={watch.model_name} />
                             <ListWatchInfo>
                               <ListWatchName>{watch.model_name}</ListWatchName>
                               <ListWatchDetails>

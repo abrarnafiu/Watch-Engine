@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import Navbar from "../components/navbar";
 import styled from "styled-components";
 import { supabase } from "../lib/supabaseClient";
+import { getImageUrl } from "../lib/imageUtils";
 
 interface Watch {
   id: string;
@@ -29,7 +30,6 @@ interface WatchList {
   created_at: string;
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
  
 const WatchDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -42,7 +42,6 @@ const WatchDetails: React.FC = () => {
   const [lists, setLists] = useState<WatchList[]>([]);
   const [newListName, setNewListName] = useState("");
   const [showNewListInput, setShowNewListInput] = useState(false);
-  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     const fetchWatch = async () => {
@@ -190,15 +189,9 @@ const WatchDetails: React.FC = () => {
     }
   };
 
-  // Get proxied image URL
-  const getImageUrl = (url: string) => {
-    if (imageError || !url) return "/placeholder.jpg";
-    // Use the proxy endpoint
-    return `${API_URL}/api/proxy-image?url=${encodeURIComponent(url)}`;
-  };
-
-  const handleImageError = () => {
-    setImageError(true);
+  const handleImageError = (event: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const img = event.target as HTMLImageElement;
+    img.src = "/placeholder.jpg";
   };
 
   if (loading) return <Loading>Loading...</Loading>;
@@ -316,7 +309,7 @@ const WatchDetails: React.FC = () => {
 
 const Container = styled.div`
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background: radial-gradient(ellipse at top, #1a1a2e 0%,rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
 `;
 
 const Content = styled.div`
