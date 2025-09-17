@@ -154,7 +154,7 @@ const BrandPage: React.FC = () => {
 
 const Container = styled.div`
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background: radial-gradient(ellipse at top, #1a1a2e 0%,rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
 `;
 
 const Content = styled.div`
@@ -165,20 +165,20 @@ const Content = styled.div`
 
 const Title = styled.h1`
   text-align: center;
-  color: #333;
+  color: #ffffff;
   margin-bottom: 2rem;
 `;
 
 const Loading = styled.div`
   text-align: center;
   font-size: 1.2rem;
-  color: #666;
+  color: #cccccc;
 `;
 
 const PaginationInfo = styled.div`
   text-align: center;
   margin-bottom: 1rem;
-  color: #777;
+  color: #cccccc;
 `;
 
 const WatchGrid = styled.div`
