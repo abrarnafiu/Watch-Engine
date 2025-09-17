@@ -388,6 +388,20 @@ export default function Profile() {
             <ProfileDetails>
               <Name>{preferences.name || 'Add your name'}</Name>
               <Bio>{preferences.bio || 'No bio added yet'}</Bio>
+              <StatsContainer>
+                <StatItem>
+                  <StatNumber>{favorites.length}</StatNumber>
+                  <StatLabel>Favorites</StatLabel>
+                </StatItem>
+                <StatItem>
+                  <StatNumber>{lists.length}</StatNumber>
+                  <StatLabel>Lists</StatLabel>
+                </StatItem>
+                <StatItem>
+                  <StatNumber>{lists.reduce((acc, list) => acc + (list.items?.length || 0), 0)}</StatNumber>
+                  <StatLabel>Watches Saved</StatLabel>
+                </StatItem>
+              </StatsContainer>
             </ProfileDetails>
           </ProfileInfo>
           <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
@@ -735,12 +749,13 @@ const Content = styled.div`
 const ProfileHeader = styled.div`
   position: relative;
   margin-bottom: 3rem;
-  background: rgba(255, 255, 255, 0.98);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
   backdrop-filter: blur(20px);
-  border-radius: 24px;
+  border-radius: 32px;
   overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 3rem;
 `;
 
 const Banner = styled.div`
@@ -761,11 +776,10 @@ const Banner = styled.div`
 
 const ProfileInfo = styled.div`
   display: flex;
-  align-items: flex-end;
-  gap: 2.5rem;
-  padding: 0 3rem 2rem;
-  margin-top: -60px;
+  align-items: center;
+  gap: 3rem;
   position: relative;
+  z-index: 2;
 `;
 
 const ProfilePicture = styled.div`
@@ -820,27 +834,69 @@ const EditIcon = styled.span`
 `;
 
 const ProfileDetails = styled.div`
-  margin-bottom: 1.5rem;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 `;
 
 const Name = styled.h2`
   margin: 0;
-  font-size: 2.5rem;
-  font-weight: 300;
-  color: #2d3748;
+  font-size: 3rem;
+  font-weight: 700;
+  color: #ffffff;
   font-family: 'Montserrat', sans-serif;
   letter-spacing: -0.02em;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 `;
 
 const Bio = styled.p`
-  margin: 0.8rem 0 0;
-  color: #718096;
-  font-size: 1.1rem;
-  font-weight: 300;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.3rem;
+  font-weight: 400;
   font-family: 'Montserrat', sans-serif;
   line-height: 1.6;
-  max-width: 500px;
+  max-width: 600px;
+`;
+
+const StatsContainer = styled.div`
+  display: flex;
+  gap: 3rem;
+  margin-top: 1rem;
+`;
+
+const StatItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 2rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.15);
+  }
+`;
+
+const StatNumber = styled.span`
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: #ffffff;
+  font-family: 'Montserrat', sans-serif;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+`;
+
+const StatLabel = styled.span`
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  margin-top: 0.5rem;
 `;
 
 const LogoutButton = styled.button`
@@ -868,30 +924,34 @@ const LogoutButton = styled.button`
 const TabsContainer = styled.div`
   display: flex;
   margin-bottom: 3rem;
-  background: rgba(255, 255, 255, 0.98);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
   backdrop-filter: blur(20px);
-  border-radius: 16px;
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.5rem;
 `;
 
 const Tab = styled.button<{ active: boolean }>`
   flex: 1;
-  padding: 1.25rem 1.5rem;
-  background: ${props => props.active ? 'linear-gradient(135deg, #667eea 0%, #ffffff 100%)' : 'transparent'};
-  color: ${props => props.active ? 'white' : '#4a5568'};
+  padding: 1.5rem 2rem;
+  background: ${props => props.active ? 'rgba(255, 255, 255, 0.2)' : 'transparent'};
+  color: ${props => props.active ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'};
   border: none;
   cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
+  font-size: 1.1rem;
+  font-weight: 600;
   font-family: 'Montserrat', sans-serif;
   transition: all 0.3s ease;
   position: relative;
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
 
   &:hover {
-    background: ${props => props.active ? 'linear-gradient(135deg, #667eea 0%, #ffffff 100%)' : 'rgba(102, 126, 234, 0.1)'};
-    color: ${props => props.active ? 'white' : '#667eea'};
+    background: ${props => props.active ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)'};
+    color: #ffffff;
+    transform: translateY(-2px);
   }
 
   &::after {
@@ -908,12 +968,12 @@ const Tab = styled.button<{ active: boolean }>`
 `;
 
 const PreferencesForm = styled.div`
-  background: rgba(255, 255, 255, 0.98);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
   backdrop-filter: blur(20px);
   padding: 3rem;
-  border-radius: 24px;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 32px;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 2rem;
 `;
 
@@ -927,12 +987,13 @@ const SectionHeader = styled.div`
 `;
 
 const SectionTitle = styled.h2`
-  color: #2d3748;
-  font-size: 1.8rem;
+  color: #ffffff;
+  font-size: 2rem;
   margin: 0 0 1.5rem 0;
-  font-weight: 400;
+  font-weight: 600;
   font-family: 'Montserrat', sans-serif;
   letter-spacing: -0.01em;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
 `;
 
 const PriceRangeContainer = styled.div`
@@ -1194,7 +1255,7 @@ const Label = styled.span`
 `;
 
 const Value = styled.span`
-  color: #2d3748;
+  color: #ffffff;
   font-family: 'Montserrat', sans-serif;
   font-weight: 500;
   font-size: 0.95rem;
@@ -1235,9 +1296,9 @@ const ModalHeader = styled.div`
 
 const ModalTitle = styled.h3`
   margin: 0;
-  color: #2d3748;
+  color: #ffffff;
   font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 1.4rem;
 `;
 
@@ -1293,7 +1354,7 @@ const UploadIcon = styled.span`
 const UploadText = styled.p`
   margin: 0;
   font-size: 1.3rem;
-  color: #2d3748;
+  color: #ffffff;
   font-family: 'Montserrat', sans-serif;
   font-weight: 400;
 `;
@@ -1319,12 +1380,12 @@ const ImagePreview = styled.img`
 `;
 
 const FavoritesSection = styled.div`
-  background: rgba(255, 255, 255, 0.98);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
   backdrop-filter: blur(20px);
   padding: 3rem;
-  border-radius: 24px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 32px;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 2rem;
 `;
 
@@ -1335,19 +1396,20 @@ const WatchGrid = styled.div`
 `;
 
 const WatchCard = styled.div`
-  background: white;
-  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
+  border-radius: 20px;
   overflow: hidden;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.2);
   transition: all 0.3s ease-in-out;
   cursor: pointer;
   position: relative;
-  border: 1px solid rgba(102, 126, 234, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
 
   &:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.15);
-    border-color: rgba(102, 126, 234, 0.3);
+    transform: translateY(-10px);
+    box-shadow: 0 25px 50px rgba(0,0,0,0.3);
+    border-color: rgba(255, 255, 255, 0.3);
   }
 `;
 
@@ -1363,17 +1425,18 @@ const WatchInfo = styled.div`
 
 const ModelName = styled.h3`
   margin: 0;
-  color: #2d3748;
-  font-size: 1.2rem;
+  color: #ffffff;
+  font-size: 1.3rem;
   font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
+  font-weight: 600;
   letter-spacing: -0.01em;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 `;
 
 const FamilyName = styled.p`
-  color: #718096;
+  color: rgba(255, 255, 255, 0.8);
   margin: 0.5rem 0;
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-family: 'Montserrat', sans-serif;
   font-weight: 500;
 `;
@@ -1386,17 +1449,18 @@ const Details = styled.div`
 `;
 
 const Year = styled.span`
-  color: #718096;
-  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.95rem;
   font-family: 'Montserrat', sans-serif;
   font-weight: 500;
 `;
 
 const Price = styled.span`
-  color: #38a169;
+  color: #4ade80;
   font-weight: 700;
-  font-size: 1rem;
+  font-size: 1.1rem;
   font-family: 'Montserrat', sans-serif;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
 `;
 
 const RemoveButton = styled.button`
@@ -1426,12 +1490,12 @@ const RemoveButton = styled.button`
 `;
 
 const ListsSection = styled.div`
-  background: rgba(255, 255, 255, 0.98);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
   backdrop-filter: blur(20px);
   padding: 3rem;
-  border-radius: 24px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 32px;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 `;
 
 const ListsContainer = styled.div`
@@ -1459,10 +1523,10 @@ const ListHeader = styled.div`
 
 const ListName = styled.h3`
   margin: 0;
-  color: #2d3748;
+  color: #ffffff;
   font-size: 1.3rem;
   font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
+  font-weight: 600;
 `;
 
 const ListActions = styled.div`
@@ -1521,7 +1585,7 @@ const ListWatchInfo = styled.div`
 
 const ListWatchName = styled.h4`
   margin: 0;
-  color: #2d3748;
+  color: #ffffff;
   font-size: 1rem;
   font-family: 'Montserrat', sans-serif;
   font-weight: 600;
