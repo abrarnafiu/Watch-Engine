@@ -5,7 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import rateLimit from 'express-rate-limit';
 import http from 'http';
-import { Ollama } from 'ollama';
+import OpenAI from 'openai';
 import { LRUCache } from 'lru-cache';
 import { createClient } from '@supabase/supabase-js';
 import { stripe, getUserSubscription, isPro, buildAffiliateUrl } from './stripe.js';
@@ -16,10 +16,10 @@ const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 
 const app = express();
-const port = 5000;
+const port = process.env.PORT || 5000;
 
-// Ollama client (local inference)
-const ollama = new Ollama({ host: process.env.OLLAMA_HOST || 'http://localhost:11434' });
+// OpenAI client
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 // Supabase client (server-side with service role key)
 const supabase = createClient(
@@ -37,8 +37,16 @@ const limiter = rateLimit({
 });
 
 // CORS configuration
+const allowedOrigins = [
+  'https://watch-engine.onrender.com',
+  'http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001',
+  'http://localhost:3002', 'http://localhost:3003',
+];
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
 const corsOptions = {
-  origin: ['https://watch-engine.onrender.com', 'http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001', 'http://localhost:3002', 'http://localhost:3003'],
+  origin: allowedOrigins,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
@@ -122,24 +130,24 @@ const successResponse = (res, data) => {
 
 // --- Local model functions ---
 
-async function generateLocalEmbedding(text) {
+async function generateEmbedding(text) {
   const cacheKey = text.trim().toLowerCase();
   const cached = embeddingCache.get(cacheKey);
   if (cached) return cached;
 
-  const response = await ollama.embeddings({
-    model: 'nomic-embed-text',
-    prompt: `search_query: ${text}`,
+  const response = await openai.embeddings.create({
+    model: 'text-embedding-3-small',
+    input: text,
   });
 
-  const embedding = response.embedding;
+  const embedding = response.data[0].embedding;
   embeddingCache.set(cacheKey, embedding);
   return embedding;
 }
 
 async function extractCategories(query) {
-  const response = await ollama.chat({
-    model: 'mistral',
+  const response = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
     messages: [
       {
         role: 'system',
@@ -157,12 +165,12 @@ async function extractCategories(query) {
       },
       { role: 'user', content: query }
     ],
-    format: 'json',
-    options: { temperature: 0.3 }
+    response_format: { type: 'json_object' },
+    temperature: 0.3,
   });
 
   try {
-    return JSON.parse(response.message.content);
+    return JSON.parse(response.choices[0].message.content);
   } catch {
     return {};
   }
@@ -308,9 +316,8 @@ app.post('/api/hybrid-search', async (req, res) => {
     const startTime = Date.now();
 
     // Step 1: Run embedding + category extraction + full-text search in parallel
-    // Full-text search doesn't need LLM, so it starts immediately
     const [embedding, criteria, fullTextResults] = await Promise.all([
-      generateLocalEmbedding(query),
+      generateEmbedding(query),
       extractCategories(query),
       runFullTextSearch(query),
     ]);
@@ -319,7 +326,6 @@ app.post('/api/hybrid-search', async (req, res) => {
     console.log(`Full-text results: ${fullTextResults.length}`);
 
     // Step 2: Run vector search + filtered search in parallel
-    // (vector search needs embedding from step 1, filter search needs criteria from step 1)
     const filters = buildSupabaseFilters(criteria);
     const hasFilters = filters.length > 0;
 
@@ -616,25 +622,10 @@ app.post('/api/track-affiliate-click', async (req, res) => {
   }
 });
 
-// Warmup Ollama models on startup to avoid cold-start latency
-async function warmupModels() {
-  try {
-    console.log('Warming up Ollama models...');
-    await Promise.all([
-      ollama.chat({ model: 'mistral', messages: [{ role: 'user', content: 'hello' }], format: 'json' }),
-      ollama.embeddings({ model: 'nomic-embed-text', prompt: 'warmup' }),
-    ]);
-    console.log('Ollama models warmed up.');
-  } catch (error) {
-    console.warn('Ollama warmup failed (is Ollama running?):', error.message);
-  }
-}
-
 export default app;
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(port, () => {
     console.log(`Server running on port ${port}`);
-    warmupModels();
   });
 }

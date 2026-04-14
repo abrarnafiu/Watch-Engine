@@ -267,24 +267,24 @@ export default function Profile() {
       if (!selectedImage.type.startsWith('image/')) throw new Error('Please upload an image file');
 
       const fileExt = selectedImage.name.split('.').pop();
-      const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+      let uploadedFileName = `${user.id}-${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage
         .from('profile-pictures')
-        .upload(fileName, selectedImage, { cacheControl: '3600', upsert: true });
+        .upload(uploadedFileName, selectedImage, { cacheControl: '3600', upsert: true });
 
       if (uploadError) {
         if (uploadError.message.includes('duplicate')) {
-          const newFileName = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+          uploadedFileName = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
           const { error: retryError } = await supabase.storage
             .from('profile-pictures')
-            .upload(newFileName, selectedImage, { cacheControl: '3600', upsert: true });
+            .upload(uploadedFileName, selectedImage, { cacheControl: '3600', upsert: true });
           if (retryError) throw retryError;
         } else {
           throw uploadError;
         }
       }
 
-      const { data: { publicUrl } } = supabase.storage.from('profile-pictures').getPublicUrl(fileName);
+      const { data: { publicUrl } } = supabase.storage.from('profile-pictures').getPublicUrl(uploadedFileName);
       const { error: updateError } = await supabase
         .from('watch_preferences')
         .update({ profile_image: publicUrl })

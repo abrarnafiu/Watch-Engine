@@ -15,7 +15,7 @@
     "lru-cache": "^11.3.3",
     "next": "^15.2.1",
     "nodemailer": "^8.0.5",
-    "ollama": "^0.6.3",
+    "openai": "^4.96.0",
     "puppeteer": "^24.40.0",
     "stripe": "^22.0.1"
   }
