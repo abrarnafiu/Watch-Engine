@@ -129,7 +129,7 @@ const BrandPage: React.FC = () => {
                       <Reference>Ref: {watch.reference}</Reference>
                     </Details>
                     {watch.price_eur && (
-                      <Price>€{watch.price_eur.toLocaleString()}</Price>
+                      <Price>${watch.price_eur.toLocaleString()}</Price>
                     )}
                   </WatchInfo>
                 </WatchCard>
@@ -155,142 +155,126 @@ const BrandPage: React.FC = () => {
 
 const Container = styled.div`
   min-height: 100vh;
-  background: radial-gradient(ellipse at top, #1a1a2e 0%,rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
+  background: #0a0a0a;
+  font-family: 'Inter', sans-serif;
 `;
-
 const Content = styled.div`
-  max-width: 1200px;
+  max-width: 1300px;
   margin: 0 auto;
   padding: 2rem;
 `;
-
 const Title = styled.h1`
-  text-align: center;
-  color: #ffffff;
-  margin-bottom: 2rem;
+  color: #f5f5f0;
+  font-family: 'Georgia', serif;
+  font-weight: 400;
+  font-size: 1.8rem;
+  margin-bottom: 0.5rem;
 `;
-
 const Loading = styled.div`
   text-align: center;
-  font-size: 1.2rem;
-  color: #cccccc;
+  color: #444;
+  font-size: 0.9rem;
+  padding: 3rem 0;
 `;
-
 const PaginationInfo = styled.div`
-  text-align: center;
-  margin-bottom: 1rem;
-  color: #cccccc;
+  color: #3a3a3a;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 1.5rem;
 `;
-
 const WatchGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 2rem;
-  padding: 1rem;
-`;
-
-const WatchCard = styled.div`
-  background: white;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1px;
+  background: #151515;
+  border: 1px solid #151515;
   border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  transition: transform 0.2s ease-in-out;
-  cursor: pointer;
-
-  &:hover {
-    transform: translateY(-5px);
-  }
 `;
-
+const WatchCard = styled.div`
+  background: #0a0a0a;
+  cursor: pointer;
+  transition: background 0.2s;
+  &:hover { background: #111; }
+`;
 const WatchImage = styled.img`
   width: 100%;
-  height: 200px;
+  height: 220px;
   object-fit: cover;
+  opacity: 0.9;
+  transition: opacity 0.3s;
+  ${WatchCard}:hover & { opacity: 1; }
 `;
-
 const WatchInfo = styled.div`
-  padding: 1rem;
+  padding: 1rem 1.2rem 1.2rem;
 `;
-
 const ModelName = styled.h3`
   margin: 0;
-  color: #333;
-  font-size: 1.1rem;
-`;
-
-const FamilyName = styled.p`
-  color: #666;
-  margin: 0.5rem 0;
-`;
-
-const Year = styled.p`
-  color: #888;
-  margin: 0.5rem 0;
+  color: #e8e8e3;
   font-size: 0.9rem;
+  font-weight: 500;
 `;
-
+const FamilyName = styled.p`
+  color: #444;
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+`;
+const Year = styled.p`
+  color: #3a3a3a;
+  margin: 0.15rem 0;
+  font-size: 0.75rem;
+`;
 const Price = styled.p`
-  color: #007bff;
-  font-weight: bold;
-  margin: 0.5rem 0;
+  color: #e8e8e3;
+  font-weight: 500;
+  font-size: 0.85rem;
+  margin: 0.6rem 0 0;
 `;
-
 const Error = styled.div`
   text-align: center;
-  color: #dc3545;
-  font-size: 1.2rem;
-  margin: 2rem 0;
-`;
-
-const Details = styled.div`
-  margin: 0.5rem 0;
-  font-size: 0.9rem;
   color: #666;
+  font-size: 0.9rem;
+  padding: 3rem 0;
 `;
-
-const Movement = styled.p`
-  margin: 0.2rem 0;
+const Details = styled.div`
+  margin: 0.4rem 0;
+  font-size: 0.7rem;
+  color: #3a3a3a;
 `;
-
-const Function = styled.p`
-  margin: 0.2rem 0;
-`;
-
-const Reference = styled.p`
-  margin: 0.2rem 0;
-  font-family: monospace;
-`;
-
+const Movement = styled.p`margin: 0.1rem 0;`;
+const Function = styled.p`margin: 0.1rem 0;`;
+const Reference = styled.p`margin: 0.1rem 0; font-family: 'SF Mono', monospace; font-size: 0.65rem; color: #333;`;
 const PaginationControls = styled.div`
   display: flex;
   justify-content: center;
   align-items: center;
   gap: 1rem;
-  margin-top: 2rem;
+  margin-top: 2.5rem;
 `;
-
 const PageButton = styled.button`
-  padding: 0.5rem 1rem;
-  background-color: #007bff;
-  color: white;
+  padding: 0.5rem 1.2rem;
+  background: #f5f5f0;
+  color: #0a0a0a;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-
-  &:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
+  &:disabled { opacity: 0.2; cursor: default; }
 `;
-
 const PageText = styled.span`
-  font-size: 1rem;
+  font-size: 0.8rem;
+  color: #444;
 `;
-
 const LimitedEdition = styled.p`
-  margin: 0.2rem 0;
-  color: #d4af37;
-  font-weight: 500;
+  margin: 0.1rem 0;
+  color: #888;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 `;
 
 export default BrandPage;

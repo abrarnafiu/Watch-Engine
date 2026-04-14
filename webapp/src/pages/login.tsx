@@ -154,146 +154,124 @@ export default function Login() {
 
 const Container = styled.div`
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background: #0a0a0a;
+  font-family: 'Inter', sans-serif;
 `;
-
 const Content = styled.div`
-  max-width: 400px;
-  margin: 2rem auto;
-  padding: 2rem;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  max-width: 380px;
+  margin: 4rem auto;
+  padding: 0 2rem;
 `;
-
 const Form = styled.form`
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 0.75rem;
 `;
-
 const Title = styled.h1`
   text-align: center;
-  color: #333;
-  margin-bottom: 1.5rem;
+  color: #f5f5f0;
+  font-family: 'Georgia', serif;
+  font-weight: 400;
+  font-size: 1.6rem;
+  margin-bottom: 2rem;
 `;
-
 const Input = styled.input`
-  padding: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  
-  &:focus {
-    outline: none;
-    border-color: #007bff;
-  }
+  padding: 0.8rem 1rem;
+  background: #141414;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: #e8e8e3;
+  outline: none;
+  transition: border-color 0.2s;
+  &:focus { border-color: #333; }
+  &::placeholder { color: #3a3a3a; }
 `;
-
 const Button = styled.button`
   padding: 0.8rem;
-  background-color: #007bff;
-  color: white;
+  background: #f5f5f0;
+  color: #0a0a0a;
   border: none;
-  border-radius: 4px;
-  font-size: 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  
-  &:hover {
-    background-color: #0056b3;
-  }
-  
-  &:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
+  transition: opacity 0.15s;
+  margin-top: 0.25rem;
+  &:hover { opacity: 0.85; }
+  &:disabled { opacity: 0.3; cursor: default; }
 `;
-
-const GoogleButton = styled(Button)`
-  background-color: white;
-  color: #333;
-  border: 1px solid #ddd;
+const GoogleButton = styled.button`
+  padding: 0.8rem;
+  background: #141414;
+  color: #888;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  
-  &:hover {
-    background-color: #f8f9fa;
-  }
-
-  &:disabled {
-    background-color: #f8f9fa;
-    cursor: not-allowed;
-  }
+  transition: all 0.15s;
+  &:hover { border-color: #333; color: #ccc; }
+  &:disabled { opacity: 0.3; cursor: default; }
 `;
-
 const Divider = styled.div`
   text-align: center;
-  color: #666;
+  color: #333;
+  font-size: 0.8rem;
   position: relative;
-  
-  &:before,
-  &:after {
+  margin: 0.5rem 0;
+  &:before, &:after {
     content: '';
     position: absolute;
     top: 50%;
-    width: 45%;
+    width: 44%;
     height: 1px;
-    background-color: #ddd;
+    background: #1e1e1e;
   }
-  
-  &:before {
-    left: 0;
-  }
-  
-  &:after {
-    right: 0;
-  }
+  &:before { left: 0; }
+  &:after { right: 0; }
 `;
-
 const ErrorMessage = styled.div`
-  color: #dc3545;
-  background-color: #f8d7da;
-  padding: 0.8rem;
-  border-radius: 4px;
+  color: #e8e8e3;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  padding: 0.7rem;
+  border-radius: 6px;
   text-align: center;
+  font-size: 0.85rem;
 `;
-
 const ToggleMode = styled.div`
   text-align: center;
-  color: #666;
+  color: #444;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
 `;
-
 const ToggleButton = styled.button`
   background: none;
   border: none;
-  color: #007bff;
+  color: #888;
   cursor: pointer;
   padding: 0;
-  
-  &:hover {
-    text-decoration: underline;
-  }
+  font-family: inherit;
+  font-size: inherit;
+  &:hover { color: #e8e8e3; }
 `;
-
 const GoogleIcon = styled.img`
-  width: 20px;
-  height: 20px;
-  margin-right: 8px;
+  width: 18px;
+  height: 18px;
 `;
-
 const LoadingSpinner = styled.div`
-  width: 20px;
-  height: 20px;
-  border: 2px solid #f3f3f3;
-  border-top: 2px solid #3498db;
+  width: 18px;
+  height: 18px;
+  border: 2px solid #333;
+  border-top-color: #888;
   border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-right: 8px;
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
+  animation: spin 0.6s linear infinite;
+  @keyframes spin { to { transform: rotate(360deg); } }
 `;

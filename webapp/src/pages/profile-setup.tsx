@@ -185,112 +185,105 @@ export default function ProfileSetup() {
 
 const Container = styled.div`
   min-height: 100vh;
-  background-color: #f5f5f5;
+  background: #0a0a0a;
+  font-family: 'Inter', sans-serif;
 `;
-
 const Content = styled.div`
-  max-width: 600px;
-  margin: 2rem auto;
-  padding: 2rem;
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  max-width: 480px;
+  margin: 3rem auto;
+  padding: 0 2rem;
 `;
-
 const Form = styled.form`
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 `;
-
 const Title = styled.h1`
   text-align: center;
-  color: #333;
-  margin-bottom: 0.5rem;
+  color: #f5f5f0;
+  font-family: 'Georgia', serif;
+  font-weight: 400;
+  font-size: 1.6rem;
+  margin-bottom: 0.25rem;
 `;
-
 const Subtitle = styled.p`
   text-align: center;
-  color: #666;
+  color: #444;
+  font-size: 0.9rem;
   margin-bottom: 2rem;
 `;
-
 const FormGroup = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.4rem;
 `;
-
 const Label = styled.label`
   font-weight: 500;
-  color: #333;
+  color: #666;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 `;
-
 const Input = styled.input`
-  padding: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
-  
-  &:focus {
-    outline: none;
-    border-color: #007bff;
-  }
+  padding: 0.8rem 1rem;
+  background: #141414;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: #e8e8e3;
+  outline: none;
+  transition: border-color 0.2s;
+  &:focus { border-color: #333; }
+  &::placeholder { color: #3a3a3a; }
 `;
-
 const TextArea = styled.textarea`
-  padding: 0.8rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 1rem;
+  padding: 0.8rem 1rem;
+  background: #141414;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-family: inherit;
+  color: #e8e8e3;
   min-height: 100px;
   resize: vertical;
-  
-  &:focus {
-    outline: none;
-    border-color: #007bff;
-  }
+  outline: none;
+  transition: border-color 0.2s;
+  &:focus { border-color: #333; }
+  &::placeholder { color: #3a3a3a; }
 `;
-
 const PriceRangeContainer = styled.div`
   display: flex;
-  gap: 1rem;
-  
-  ${Input} {
-    flex: 1;
-  }
+  gap: 0.75rem;
+  ${Input} { flex: 1; }
 `;
-
 const Button = styled.button`
-  padding: 1rem;
-  background-color: #007bff;
-  color: white;
+  padding: 0.85rem;
+  background: #f5f5f0;
+  color: #0a0a0a;
   border: none;
-  border-radius: 4px;
-  font-size: 1rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  
-  &:hover {
-    background-color: #0056b3;
-  }
-  
-  &:disabled {
-    background-color: #ccc;
-    cursor: not-allowed;
-  }
+  margin-top: 0.5rem;
+  transition: opacity 0.15s;
+  &:hover { opacity: 0.85; }
+  &:disabled { opacity: 0.3; cursor: default; }
 `;
-
 const ErrorMessage = styled.div`
-  color: #dc3545;
-  background-color: #f8d7da;
-  padding: 0.8rem;
-  border-radius: 4px;
+  color: #e8e8e3;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.15);
+  padding: 0.7rem;
+  border-radius: 6px;
   text-align: center;
+  font-size: 0.85rem;
 `;
-
 const LoadingMessage = styled.div`
   text-align: center;
-  padding: 2rem;
-  font-size: 1.2rem;
-  color: #666;
+  padding: 3rem;
+  font-size: 0.9rem;
+  color: #444;
 `; 

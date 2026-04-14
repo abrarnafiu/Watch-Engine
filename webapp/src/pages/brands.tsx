@@ -120,114 +120,96 @@ const BrandsPage: React.FC = () => {
 
 const Container = styled.div`
   min-height: 100vh;
-  background: radial-gradient(ellipse at top, #1a1a2e 0%,rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
+  background: #0a0a0a;
+  font-family: 'Inter', sans-serif;
 `;
-
 const Content = styled.div`
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
   padding: 2rem;
 `;
-
 const Title = styled.h1`
   text-align: center;
-  color: #ffffff;
+  color: #f5f5f0;
   margin-bottom: 2rem;
-  font-size: 2.5rem;
+  font-family: 'Georgia', serif;
+  font-weight: 400;
+  font-size: 2rem;
 `;
-
 const BrandGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 1.5rem;
-  padding: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1px;
+  background: #151515;
+  border-radius: 8px;
+  overflow: hidden;
 `;
-
 const BrandCard = styled.div`
-  background: white;
-  border-radius: 10px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-  transition: transform 0.2s ease-in-out;
-
-  &:hover {
-    transform: translateY(-5px);
-  }
+  background: #0a0a0a;
+  transition: background 0.15s;
+  &:hover { background: #111; }
 `;
-
 const StyledLink = styled(Link)`
   display: block;
-  padding: 1.5rem;
-  text-align: center;
-  color: #333;
+  padding: 1.2rem 1.5rem;
+  color: #888;
   text-decoration: none;
-  font-size: 1.2rem;
+  font-size: 0.9rem;
   font-weight: 500;
-
-  &:hover {
-    color: #007bff;
-  }
+  transition: color 0.15s;
+  &:hover { color: #e8e8e3; }
 `;
-
 const SearchContainer = styled.div`
-  margin: 0 auto 2rem;
-  max-width: 600px;
-  padding: 0 1rem;
+  margin: 0 auto 2.5rem;
+  max-width: 500px;
 `;
-
 const SearchInput = styled.input`
   width: 100%;
-  padding: 1rem;
-  font-size: 1.1rem;
-  border: 2px solid #ddd;
-  border-radius: 8px;
+  padding: 0.85rem 1rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  background: #141414;
+  border: 1px solid #1e1e1e;
+  border-radius: 10px;
+  color: #e8e8e3;
   outline: none;
-  transition: border-color 0.2s ease;
-
-  &:focus {
-    border-color: #007bff;
-  }
+  transition: border-color 0.2s;
+  &:focus { border-color: #333; }
+  &::placeholder { color: #3a3a3a; }
 `;
-
 const Section = styled.div`
   margin-bottom: 2rem;
 `;
-
 const LetterDivider = styled.div`
   display: flex;
   align-items: center;
-  margin: 2rem 0 1rem;
+  margin: 2rem 0 0.75rem;
 `;
-
 const Letter = styled.span`
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #007bff;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #555;
   margin-right: 1rem;
-  min-width: 30px;
+  min-width: 20px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 `;
-
 const Line = styled.div`
   flex: 1;
-  height: 2px;
-  background: linear-gradient(to right, #007bff, #e0e0e0);
+  height: 1px;
+  background: #1a1a1a;
 `;
-
 const LoadingMessage = styled.div`
   text-align: center;
-  font-size: 1.2rem;
-  color: #cccccc;
-  margin-top: 2rem;
+  font-size: 0.9rem;
+  color: #444;
+  margin-top: 3rem;
 `;
-
 const ErrorMessage = styled.div`
   text-align: center;
-  font-size: 1.2rem;
-  color: #dc3545;
-  margin-top: 2rem;
-  padding: 1rem;
-  background-color: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 3rem;
 `;
 
 export default BrandsPage;

@@ -1,9 +1,8 @@
-import { useState, useRef} from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Navbar from '../components/navbar';
 import Footer from '../components/footer';
-import styled from 'styled-components';
-import { supabase } from '../lib/supabaseClient';
+import styled, { keyframes } from 'styled-components';
 import { API_URL } from '../config';
 import { getImageUrl } from '../lib/imageUtils';
 
@@ -23,20 +22,7 @@ interface Watch {
   dial_color: string | null;
   source: string | null;
   brand_id: number;
-}
-
-interface SearchCriteria {
-  model_name?: string;
-  family_name?: string;
-  movement_name?: string;
-  function_name?: string;
-  year_produced?: string;
-  limited_edition?: string;
-  price_eur_min?: number;
-  price_eur_max?: number;
-  dial_color?: string;
-  brand_id?: number;
-  description?: string;
+  similarity?: number;
 }
 
 export default function Home() {
@@ -44,877 +30,410 @@ export default function Home() {
   const [query, setQuery] = useState('');
   const [watches, setWatches] = useState<Watch[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | React.ReactNode | null>(null);
-  const [searchCriteria, setSearchCriteria] = useState<SearchCriteria | null>(null);
-  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [, setFilters] = useState<SearchCriteria>({});
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setQuery(e.target.value);
-
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight - 20}px`;
-    }
-  };
-
-  const handleFilterChange = (key: keyof SearchCriteria, value: string | number | boolean) => {
-    setFilters(prev => ({
-      ...prev,
-      [key]: value
-    }));
-  };
-
-  const analyzeQuery = async (userQuery: string): Promise<SearchCriteria> => {
-    try {
-      console.log('Analyzing query:', userQuery);
-      
-      const response = await fetch(`${API_URL}/api/analyze-query`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          query: userQuery,
-          schema: {
-            model_name: "text",
-            family_name: "text",
-            movement_name: "text",
-            function_name: "text",
-            year_produced: "text",
-            limited_edition: "text",
-            price_eur: "numeric",
-            dial_color: "text",
-            description: "text"
-          }
-        }),
-      });
-
-      if (!response.ok) {
-        console.error('Analyze query error:', response.status, response.statusText);
-        throw new Error(`Failed to analyze query: ${response.status} ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      
-      // The API returns the criteria directly as a JSON object
-      console.log('API response:', result);
-      
-      // Check if the response has a data property
-      const responseData = result.data || result;
-      console.log('Response data to process:', responseData);
-      
-      // Map the API response to our SearchCriteria interface
-      const criteria: SearchCriteria = {};
-      
-      // Map Type to model_name
-      if (responseData.Type) {
-        console.log('Found Type:', responseData.Type);
-        criteria.model_name = responseData.Type;
-      }
-      
-      // Map Dial Color to dial_color
-      if (responseData['Dial Color']) {
-        console.log('Found Dial Color:', responseData['Dial Color']);
-        criteria.dial_color = responseData['Dial Color'];
-      }
-      
-      // Map Price to price_eur_max
-      if (responseData.Price) {
-        console.log('Found Price:', responseData.Price);
-        const priceStr = responseData.Price.toString().toLowerCase();
-        if (priceStr.includes('under') || priceStr.includes('less than')) {
-          const priceValue = parseInt(priceStr.replace(/[^0-9]/g, ''));
-          if (!isNaN(priceValue)) {
-            console.log('Setting price_eur_max to:', priceValue);
-            criteria.price_eur_max = priceValue;
-          }
-        } else if (priceStr.includes('over') || priceStr.includes('more than')) {
-          const priceValue = parseInt(priceStr.replace(/[^0-9]/g, ''));
-          if (!isNaN(priceValue)) {
-            console.log('Setting price_eur_min to:', priceValue);
-            criteria.price_eur_min = priceValue;
-          }
-        } else if (priceStr.includes('-') || priceStr.includes('to')) {
-          const priceRange = priceStr.split(/[-to]/).map((p: string) => parseInt(p.replace(/[^0-9]/g, '')));
-          if (priceRange.length === 2 && !isNaN(priceRange[0]) && !isNaN(priceRange[1])) {
-            console.log('Setting price range:', priceRange[0], 'to', priceRange[1]);
-            criteria.price_eur_min = priceRange[0];
-            criteria.price_eur_max = priceRange[1];
-          }
-        } else {
-          const priceValue = parseInt(priceStr.replace(/[^0-9]/g, ''));
-          if (!isNaN(priceValue)) {
-            console.log('Setting price_eur_max to:', priceValue);
-            criteria.price_eur_max = priceValue;
-          }
-        }
-      }
-      
-      // Remove undefined properties
-      Object.keys(criteria).forEach(key => {
-        if (criteria[key as keyof SearchCriteria] === undefined) {
-          delete criteria[key as keyof SearchCriteria];
-        }
-      });
-      
-      console.log('Processed search criteria:', criteria);
-      return criteria;
-    } catch (error) {
-      console.error('Error analyzing query:', error);
-      // Return empty criteria instead of throwing
-      return {};
-    }
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') searchWatches();
   };
 
   const searchWatches = async () => {
     if (!query.trim()) return;
-    
     setLoading(true);
     setError(null);
     setWatches([]);
-    
+    setHasSearched(true);
+
     try {
-      const criteria = await analyzeQuery(query);
-      setSearchCriteria(criteria);
-      
-      // Step 2: Build a base query with all the search criteria
-      let supabaseQuery = supabase.from('watches').select('*');
-      
-      // Apply filters based on search criteria
-      if (criteria.model_name) {
-        console.log('Adding model_name filter:', criteria.model_name);
-        // Use case-insensitive partial match
-        supabaseQuery = supabaseQuery.ilike('model_name', `%${criteria.model_name.toLowerCase()}%`);
-      }
-      if (criteria.family_name) {
-        console.log('Adding family_name filter:', criteria.family_name);
-        supabaseQuery = supabaseQuery.ilike('family_name', `%${criteria.family_name}%`);
-      }
-      if (criteria.year_produced) {
-        console.log('Adding year_produced filter:', criteria.year_produced);
-        supabaseQuery = supabaseQuery.eq('year_produced', criteria.year_produced);
-      }
-      if (criteria.movement_name) {
-        console.log('Adding movement_name filter:', criteria.movement_name);
-        supabaseQuery = supabaseQuery.ilike('movement_name', `%${criteria.movement_name}%`);
-      }
-      if (criteria.function_name) {
-        console.log('Adding function_name filter:', criteria.function_name);
-        supabaseQuery = supabaseQuery.ilike('function_name', `%${criteria.function_name}%`);
-      }
-      if (criteria.limited_edition !== undefined) {
-        console.log('Adding limited_edition filter:', criteria.limited_edition);
-        supabaseQuery = supabaseQuery.eq('limited_edition', criteria.limited_edition);
-      }
-      if (criteria.price_eur_min) {
-        console.log('Adding price_eur_min filter:', criteria.price_eur_min);
-        supabaseQuery = supabaseQuery.gte('price_eur', criteria.price_eur_min);
-      }
-      if (criteria.price_eur_max) {
-        console.log('Adding price_eur_max filter:', criteria.price_eur_max);
-        supabaseQuery = supabaseQuery.lte('price_eur', criteria.price_eur_max);
-      }
-      if (criteria.description) {
-        console.log('Adding description filter:', criteria.description);
-        supabaseQuery = supabaseQuery.ilike('description', `%${criteria.description}%`);
-      }
-      if (criteria.dial_color) {
-        console.log('Adding dial_color filter:', criteria.dial_color);
-        // Use case-insensitive partial match
-        supabaseQuery = supabaseQuery.ilike('dial_color', `%${criteria.dial_color.toLowerCase()}%`);
-      }
-      
-      // Execute the query
-      console.log('Executing filtered query...');
-      
-      // Check if we have any filters applied
-      const hasFilters = Object.keys(criteria).length > 0;
-      console.log('Has filters applied:', hasFilters);
-      
-      if (!hasFilters) {
-        console.log('No filters applied, skipping filtered query');
-        // If no filters, go straight to vector similarity search
-        const { data, error } = await supabase.rpc('search_watches_by_similarity', {
-          query_text: query,
-          similarity_threshold: 0.1  // Lower threshold to get more results
-        });
-        
-        if (error) {
-          console.error('Supabase error:', error);
-          throw error;
-        }
-        
-        console.log('Vector similarity search results:', data?.length || 0, 'items');
-        
-        if (data && data.length > 0) {
-          setWatches(data);
-        } else {
-          setError('No watches found matching your criteria. Try a different search.');
-        }
-        return;
-      }
-      
-      const { data: filteredData, error: filteredError } = await supabaseQuery;
-      
-      if (filteredError) {
-        console.error('Supabase filtered query error:', filteredError);
-        throw filteredError;
-      }
-      
-      console.log('Filtered query results:', filteredData?.length || 0, 'items');
-      
-      // If we have filtered results, use them
-      if (filteredData && filteredData.length > 0) {
-        console.log('Using filtered results');
-        setWatches(filteredData);
-        return;
-      }
-      
-      // If no filtered results, fall back to vector similarity search
-      console.log('No filtered results, falling back to vector similarity search');
-      const { data, error } = await supabase.rpc('search_watches_by_similarity', {
-        query_text: query,
-        similarity_threshold: 0.1  // Lower threshold to get more results
+      const response = await fetch(`${API_URL}/api/hybrid-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query }),
       });
-      
-      if (error) {
-        console.error('Supabase error:', error);
-        throw error;
-      }
-      
-      console.log('Vector similarity search results:', data?.length || 0, 'items');
-      
-      if (data && data.length > 0) {
-        setWatches(data);
+      const result = await response.json();
+
+      if (result.success && result.data?.length > 0) {
+        setWatches(result.data);
+        setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
       } else {
-        setError('No watches found matching your criteria. Try a different search.');
+        setError('No results found. Try a different description.');
       }
-    } catch (err) {
-      console.error('Search error:', err);
-      if (err instanceof Error) {
-        if (err.message.includes('daily search limit')) {
-          if (err.message.includes('Please sign up or log in')) {
-            setError(
-              <div>
-                {err.message}
-                <br />
-                <LoginPrompt>
-                  <LoginButton onClick={() => navigate('/login')}>Log In</LoginButton>
-                  <SignupButton onClick={() => navigate('/login?mode=signup')}>Sign Up</SignupButton>
-                </LoginPrompt>
-              </div>
-            );
-          } else {
-            setError(err.message);
-          }
-        } else {
-          setError('Failed to search watches. Please try again.');
-        }
-      } else {
-        setError('An unexpected error occurred. Please try again.');
-      }
+    } catch {
+      setError('Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleWatchClick = (watchId: string) => {
-    navigate(`/watch/${watchId}`);
-  };
-
   return (
-    <Container>
+    <Page>
       <Navbar />
-      <MainContent>
-        <SearchSection>
-          <Title className="font-bold">Find Your Perfect <br /> Watch.</Title>
-          <Subtitle>
-            Describe the watch you're looking for in natural language, or use our advanced filters below.
-            For example: "Find me a diving watch with a blue dial under $5000"
-          </Subtitle>
-          <SearchBox>
-            <SearchTextarea
-              ref={textareaRef}
-              placeholder="Describe your ideal watch..."
+
+      <Hero shrink={hasSearched}>
+        <HeroInner>
+          <Headline>
+            The watch you're
+            <br />looking for.
+          </Headline>
+          <Sub>Search 42,000+ watches by describing what you want.</Sub>
+
+          <SearchBar>
+            <SearchIcon>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+            </SearchIcon>
+            <Input
+              ref={inputRef}
+              type="text"
+              placeholder="Blue diving watch under $5,000..."
               value={query}
-              onChange={handleChange}
+              onChange={e => setQuery(e.target.value)}
+              onKeyDown={handleKeyDown}
             />
-            <ButtonContainer>
-              <SearchButton 
-                onClick={searchWatches}
-                disabled={loading || !query.trim()}
-              >
-                {loading ? 'Searching...' : 'Search Watches'}
-              </SearchButton>
-              <FilterButton 
-                aria-label={showAdvancedFilters ? 'Hide filters' : 'Show filters'}
-                title={showAdvancedFilters ? 'Hide filters' : 'Show filters'}
-                onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M3 5h18v2l-7 7v5l-4-2v-3L3 7V5z" />
-                </svg>
-              </FilterButton>
-            </ButtonContainer>
-          </SearchBox>
-        </SearchSection>
+            {query && (
+              <GoBtn onClick={searchWatches} disabled={loading}>
+                {loading ? <Dot /> : 'Search'}
+              </GoBtn>
+            )}
+          </SearchBar>
 
-        {showAdvancedFilters && (
-          <FiltersContainer>
-            <FilterGroup>
-              <FilterLabel>Price Range (EUR)</FilterLabel>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <FilterInput
-                  type="number"
-                  placeholder="Min"
-                  onChange={(e) => handleFilterChange('price_eur_min', Number(e.target.value))}
-                />
-                <FilterInput
-                  type="number"
-                  placeholder="Max"
-                  onChange={(e) => handleFilterChange('price_eur_max', Number(e.target.value))}
-                />
-              </div>
-            </FilterGroup>
+          {!hasSearched && (
+            <Suggestions>
+              {['chronograph under $3,000', 'dress watch with moonphase', 'rugged field watch', 'vintage diver'].map(s => (
+                <Pill key={s} onClick={() => { setQuery(s); inputRef.current?.focus(); }}>{s}</Pill>
+              ))}
+            </Suggestions>
+          )}
+        </HeroInner>
+      </Hero>
 
-            <FilterGroup>
-              <FilterLabel>Year Range</FilterLabel>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <FilterInput
-                  type="number"
-                  placeholder="Min"
-                  onChange={(e) => handleFilterChange('year_produced', e.target.value)}
-                />
-              </div>
-            </FilterGroup>
+      {/* Results */}
+      <Results ref={resultsRef}>
+        {error && <ErrorMsg>{error}</ErrorMsg>}
 
-            <FilterGroup>
-              <FilterLabel>Movement</FilterLabel>
-              <FilterInput
-                type="text"
-                placeholder="Movement name"
-                onChange={(e) => handleFilterChange('movement_name', e.target.value)}
-              />
-            </FilterGroup>
-
-            <FilterGroup>
-              <FilterLabel>Function</FilterLabel>
-              <FilterInput
-                type="text"
-                placeholder="Function name"
-                onChange={(e) => handleFilterChange('function_name', e.target.value)}
-              />
-            </FilterGroup>
-
-            <FilterGroup>
-              <FilterLabel>Dial Color</FilterLabel>
-              <FilterInput
-                type="text"
-                placeholder="Dial color"
-                onChange={(e) => handleFilterChange('dial_color', e.target.value)}
-              />
-            </FilterGroup>
-
-            <FilterGroup>
-              <FilterLabel>Limited Edition</FilterLabel>
-              <FilterSelect
-                onChange={(e) => handleFilterChange('limited_edition', e.target.value)}
-              >
-                <option value="">All</option>
-                <option value="true">Yes</option>
-                <option value="false">No</option>
-              </FilterSelect>
-            </FilterGroup>
-          </FiltersContainer>
-        )}
-
-        {error && <ErrorMessage>{error}</ErrorMessage>}
-
-        {loading && <LoadingSpinner>Searching...</LoadingSpinner>}
-
-        {searchCriteria && (
-          <SearchCriteriaDisplay>
-            <CriteriaTitle>Search Criteria:</CriteriaTitle>
-            <CriteriaList>
-              {Object.entries(searchCriteria).map(([key, value]) => {
-                if (key === 'embedding_query') return null;
-                if (!value) return null;
-                
-                const formattedKey = key
-                  .split('_')
-                  .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-                  .join(' ');
-                
-                // Convert value to string if it's an object
-                const displayValue = typeof value === 'object' ? JSON.stringify(value) : String(value);
-                
-                return (
-                  <CriteriaItem key={key}>
-                    <CriteriaKey>{formattedKey}:</CriteriaKey>
-                    <CriteriaValue>{displayValue}</CriteriaValue>
-                  </CriteriaItem>
-                );
-              })}
-            </CriteriaList>
-          </SearchCriteriaDisplay>
+        {loading && (
+          <LoadWrap>
+            <Dot />
+            <LoadText>Searching...</LoadText>
+          </LoadWrap>
         )}
 
         {watches.length > 0 && (
-          <ResultsSection>
-            <ResultsTitle>Matching Watches</ResultsTitle>
-            <WatchGrid>
-              {watches.map((watch) => (
-                <WatchCard key={watch.id} onClick={() => handleWatchClick(watch.id)}>
-                  <WatchImage src={getImageUrl(watch.image_url)} alt={watch.model_name} />
-                  <WatchInfo>
-                    <WatchTitle>
-                      {watch.model_name}
-                      {watch.limited_edition && <LimitedEdition>Limited Edition</LimitedEdition>}
-                    </WatchTitle>
-                    <WatchDetails>{watch.family_name}</WatchDetails>
-                    <WatchDetails>Year: {watch.year_produced}</WatchDetails>
-                    <WatchDetails>Movement: {watch.movement_name}</WatchDetails>
-                    <WatchDetails>Function: {watch.function_name}</WatchDetails>
-                    {watch.price_eur && (
-                      <WatchDetails>Price: €{watch.price_eur.toLocaleString()}</WatchDetails>
-                    )}
-                  </WatchInfo>
-                </WatchCard>
+          <>
+            <ResultsMeta>{watches.length} results</ResultsMeta>
+            <Grid>
+              {watches.map((w, i) => (
+                <Card key={w.id} onClick={() => navigate(`/watch/${w.id}`)} style={{ animationDelay: `${i * 40}ms` }}>
+                  <ImgWrap>
+                    <Img src={getImageUrl(w.image_url)} alt={w.model_name} loading="lazy" />
+                    {w.limited_edition && <Ltd>Limited</Ltd>}
+                  </ImgWrap>
+                  <Body>
+                    <Model>{w.model_name}</Model>
+                    <Family>{w.family_name}</Family>
+                    <Bottom>
+                      <Tags>
+                        {w.year_produced && <Tag>{w.year_produced}</Tag>}
+                        {w.dial_color && <Tag>{w.dial_color}</Tag>}
+                      </Tags>
+                      {w.price_eur && <Price>${w.price_eur.toLocaleString()}</Price>}
+                    </Bottom>
+                  </Body>
+                </Card>
               ))}
-            </WatchGrid>
-          </ResultsSection>
+            </Grid>
+          </>
         )}
+      </Results>
 
-        
-      </MainContent>
-      <Footer/>
-    </Container>
+      <Footer />
+    </Page>
   );
 }
 
-// Styled components
-const Container = styled.div`
+/* ═══ Animations ═══ */
+
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+`;
+
+const pulse = keyframes`
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+`;
+
+/* ═══ Layout ═══ */
+
+const Page = styled.div`
   min-height: 100vh;
-  background: radial-gradient(ellipse at top, #1a1a2e 0%,rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
-  background-attachment: fixed;
-  position: relative;
-  overflow-x: hidden;
-  
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 100vh;
-    background: radial-gradient(circle at top center, rgba(255, 255, 255, 0.35) 0%, rgba(255, 255, 255, 0.15) 30%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-    opacity: 0;
-    animation: fadeInLight 1.5s ease-in-out forwards;
-  }
-  
-  @keyframes fadeInLight {
-    0% {
-      opacity: 0;
-    }
-    100% {
-      opacity: 1;
-    }
-  }
+  background: #0a0a0a;
+  color: #e8e8e3;
+  font-family: 'Inter', -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
 `;
 
-const MainContent = styled.div`
-  max-width: 1400px;
-  margin: 0 auto;
+const Hero = styled.section<{ shrink: boolean }>`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: ${p => p.shrink ? '30vh' : '75vh'};
   padding: 2rem;
+  transition: min-height 0.5s ease;
 `;
 
-const SearchSection = styled.div`
+const HeroInner = styled.div`
   text-align: center;
-  margin-top: 0rem;
-  margin-bottom: 3rem;
-  padding: 3rem 2rem;
+  max-width: 640px;
+  width: 100%;
+  animation: ${fadeIn} 0.6s ease-out;
 `;
 
-const Title = styled.h1`
-  font-size: 4.5rem;
-  font-weight: 600;
-  font-family: 'Montserrat', sans-serif;
-  color: rgb(255, 255, 255);
-  margin-bottom: 1.5rem;
+const Headline = styled.h1`
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: clamp(2.4rem, 5vw, 3.8rem);
+  font-weight: 400;
+  line-height: 1.15;
   letter-spacing: -0.02em;
-  line-height: 1.1;
+  color: #f5f5f0;
+  margin: 0 0 1.2rem;
 `;
 
-const Subtitle = styled.p`
-  color:rgb(126, 136, 141);
-  font-size: 1rem;
-  font-weight: 200;
-  font-family: 'Inter', sans-serif;
-  margin-bottom: 2.5rem;
-  line-height: 1.6;
-  max-width: 800px;
-  margin-left: auto;
-  margin-right: auto;
+const Sub = styled.p`
+  font-size: 0.95rem;
+  color: #5a5a5a;
+  font-weight: 400;
+  margin: 0 0 2.5rem;
   letter-spacing: 0.01em;
 `;
 
-const SearchBox = styled.div`
-  max-width: 800px;
-  margin: 0 auto;
-  font-weight: 200;
+/* ═══ Search ═══ */
+
+const SearchBar = styled.div`
+  display: flex;
+  align-items: center;
+  background: #141414;
+  border: 1px solid #1e1e1e;
+  border-radius: 12px;
+  padding: 0.2rem 0.3rem 0.2rem 1rem;
+  transition: border-color 0.2s;
+
+  &:focus-within {
+    border-color: #333;
+  }
 `;
 
-const SearchTextarea = styled.textarea`
-  width: 100%;
-  min-height: 80px;
-  padding: 1.5rem;
-  font-size: 1.1rem;
-  font-family: 'Droid Sans', sans-serif;
-  font-weight: 300;
-  border: 1px solid rgba(255, 255, 255, 0.62);
-  border-radius: 20px;
-  margin-bottom: 1.5rem;
-  resize: none;
+const SearchIcon = styled.div`
+  color: #3a3a3a;
+  flex-shrink: 0;
+  display: flex;
+`;
+
+const Input = styled.input`
+  flex: 1;
+  background: none;
+  border: none;
   outline: none;
-  transition: all 0.3s ease;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 20px rgba(255, 255, 255, 0.23);
-  color: white;
+  color: #e8e8e3;
+  font-size: 0.95rem;
+  padding: 0.85rem 0.75rem;
+  font-family: inherit;
 
   &::placeholder {
-    color: rgba(189, 189, 189, 0.49);
-    font-style: italic;
-    font-weight: 200;
-  }
-
-  &:focus {
-    border-color: rgba(255, 255, 255, 0.7);
-    box-shadow: 0 20px 40px rgba(255, 255, 255, 0.35);
-    transform: translateY(-2px);
-    background: rgba(255, 255, 255, 0.15);
+    color: #3a3a3a;
   }
 `;
 
-const ButtonContainer = styled.div`
-  display: flex;
-  gap: 1rem;
-  justify-content: center;
-  align-items: center;
-`;
-
-const SearchButton = styled.button<{ primary?: boolean }>`
-  padding: 1.3rem 3rem;
-  font-size: 1rem;
-  min-height: 56px;
-  font-family: 'Inter', sans-serif;
-  font-weight: 300;
-  background: linear-gradient(135deg, #4a90e2 0%, #87ceeb 100%);
-  color: white;
+const GoBtn = styled.button`
+  padding: 0.6rem 1.3rem;
+  background: #f5f5f0;
+  color: #0a0a0a;
   border: none;
-  border-radius: 28px;
+  border-radius: 9px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
-  transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 8px 25px rgba(74, 144, 226, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  position: relative;
-  overflow: hidden;
+  transition: opacity 0.15s;
+  white-space: nowrap;
 
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: #666;
-    opacity: 0;
-    transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1);
-    z-index: 1;
-  }
-
-  &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 12px 35px rgba(74, 144, 226, 0.6);
-  }
-
-  &:active {
-    transform: translateY(-1px);
-  }
-
-  &:disabled {
-    color: #333;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-
-    &::before {
-      opacity: .8;
-    }
-
-    > * {
-      position: relative;
-      z-index: 2;
-    }
-  }
+  &:hover { opacity: 0.85; }
+  &:disabled { opacity: 0.4; cursor: default; }
 `;
 
-const FilterButton = styled(SearchButton)`
-  padding: 0;
-  width: 56px;
-  height: 56px;
-  min-width: 56px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
-  box-shadow: 0 8px 20px rgba(108, 117, 125, 0.35);
-  text-transform: none;
-  letter-spacing: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-
-  svg {
-    width: 22px;
-    height: 22px;
-    fill: #fff;
-  }
-
-  &:hover {
-    box-shadow: 0 12px 28px rgba(108, 117, 125, 0.45);
-    transform: translateY(-2px) scale(1.05);
-  }
-`;
-
-const FiltersContainer = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 2rem;
-  border-radius: 20px;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-`;
-
-const FilterGroup = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-`;
-
-const FilterLabel = styled.label`
-  font-weight: 600;
-  font-family: 'Inter', sans-serif;
-  color: #333;
-  font-size: 0.95rem;
-  letter-spacing: 0.01em;
-`;
-
-const FilterInput = styled.input`
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  font-family: 'Inter', sans-serif;
-  font-weight: 400;
-  
-  &:focus {
-    outline: none;
-    border-color: #007bff;
-  }
-`;
-
-const FilterSelect = styled.select`
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  
-  &:focus {
-    outline: none;
-    border-color: #007bff;
-  }
-`;
-
-const LoadingSpinner = styled.div`
-  text-align: center;
-  padding: 2rem;
-  font-size: 1.2rem;
-  color: #666;
-`;
-
-const ErrorMessage = styled.div`
-  color: #dc3545;
-  text-align: center;
-  padding: 1rem;
-  margin: 1rem 0;
-  background-color: #fff;
-  border-radius: 8px;
-  border: 1px solid #dc3545;
-`;
-
-const SearchCriteriaDisplay = styled.div`
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 2rem;
-  border-radius: 20px;
-  margin-bottom: 2rem;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-`;
-
-const CriteriaTitle = styled.h3`
-  margin: 0 0 1rem 0;
-  color: #333;
-  font-size: 1.2rem;
-  font-weight: 600;
-  font-family: 'Inter', sans-serif;
-  letter-spacing: 0.01em;
-`;
-
-const CriteriaList = styled.div`
+const Suggestions = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 1rem;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 1.4rem;
 `;
 
-const CriteriaItem = styled.div`
-  display: flex;
-  align-items: center;
-  background: #f8f9fa;
-  padding: 0.5rem 1rem;
+const Pill = styled.button`
+  padding: 0.4rem 0.9rem;
+  background: transparent;
+  border: 1px solid #1e1e1e;
   border-radius: 20px;
-`;
-
-const CriteriaKey = styled.span`
-  font-weight: 600;
-  font-family: 'Inter', sans-serif;
-  color: #495057;
-  margin-right: 0.5rem;
-  font-size: 0.9rem;
-`;
-
-const CriteriaValue = styled.span`
-  color: #212529;
-`;
-
-const ResultsSection = styled.div`
-  margin-top: 3rem;
-  margin-bottom: 4rem;
-`;
-
-const ResultsTitle = styled.h2`
-  font-size: 2.2rem;
-  color: white;
-  margin-bottom: 2rem;
-  text-align: center;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-  font-weight: 800;
-  font-family: 'Inter', sans-serif;
-  letter-spacing: -0.01em;
-`;
-
-const WatchGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 2rem;
-`;
-
-const WatchCard = styled.div`
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
-  transition: all 0.3s ease-in-out;
+  color: #4a4a4a;
+  font-size: 0.75rem;
+  font-family: inherit;
   cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  transition: all 0.15s;
 
   &:hover {
-    transform: translateY(-8px) scale(1.02);
-    box-shadow: 0 25px 50px rgba(0,0,0,0.15);
+    color: #999;
+    border-color: #333;
   }
 `;
 
-const WatchImage = styled.img`
-  width: 100%;
-  height: 200px;
-  object-fit: cover;
+/* ═══ Results ═══ */
+
+const Results = styled.div`
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 0 2rem 5rem;
 `;
 
-const WatchInfo = styled.div`
-  padding: 1rem;
-`;
-
-const WatchTitle = styled.h3`
-  margin: 0 0 0.5rem 0;
-  font-size: 1.2rem;
-  font-weight: 600;
-  font-family: 'Inter', sans-serif;
-  color: #333;
-  letter-spacing: 0.01em;
-`;
-
-const WatchDetails = styled.p`
-  margin: 0.25rem 0;
+const ErrorMsg = styled.div`
+  text-align: center;
+  padding: 2rem;
   color: #666;
   font-size: 0.9rem;
-  font-family: 'Inter', sans-serif;
-  font-weight: 400;
-  line-height: 1.4;
 `;
 
-const LimitedEdition = styled.span`
-  background-color: #ffd700;
-  color: #000;
-  padding: 0.25rem 0.5rem;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  margin-left: 0.5rem;
-`;
-
-const LoginPrompt = styled.div`
-  margin-top: 1rem;
+const LoadWrap = styled.div`
   display: flex;
-  gap: 1rem;
+  align-items: center;
   justify-content: center;
+  gap: 0.6rem;
+  padding: 3rem 0;
 `;
 
-const LoginButton = styled.button`
-  padding: 0.5rem 1rem;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
+const Dot = styled.div`
+  width: 6px;
+  height: 6px;
+  background: #555;
+  border-radius: 50%;
+  animation: ${pulse} 1s ease-in-out infinite;
+`;
+
+const LoadText = styled.span`
+  color: #444;
+  font-size: 0.85rem;
+`;
+
+const ResultsMeta = styled.div`
+  font-size: 0.7rem;
+  color: #3a3a3a;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 500;
+  margin-bottom: 1.5rem;
+`;
+
+const Grid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1px;
+  background: #151515;
+  border: 1px solid #151515;
+  border-radius: 12px;
+  overflow: hidden;
+`;
+
+const Card = styled.div`
+  background: #0a0a0a;
   cursor: pointer;
-  font-size: 1rem;
+  animation: ${fadeIn} 0.4s ease-out both;
+  transition: background 0.2s;
 
   &:hover {
-    background-color: #0056b3;
+    background: #111;
   }
 `;
 
-const SignupButton = styled.button`
-  padding: 0.5rem 1rem;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
+const ImgWrap = styled.div`
+  position: relative;
+  background: #0d0d0d;
+  overflow: hidden;
+`;
 
-  &:hover {
-    background-color: #218838;
+const Img = styled.img`
+  width: 100%;
+  height: 240px;
+  object-fit: cover;
+  display: block;
+  opacity: 0.9;
+  transition: opacity 0.3s, transform 0.5s;
+
+  ${Card}:hover & {
+    opacity: 1;
+    transform: scale(1.03);
   }
 `;
 
+const Ltd = styled.span`
+  position: absolute;
+  top: 0.6rem;
+  left: 0.6rem;
+  background: #f5f5f0;
+  color: #0a0a0a;
+  padding: 0.15rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+`;
 
+const Body = styled.div`
+  padding: 1rem 1.2rem 1.2rem;
+`;
 
+const Model = styled.h3`
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #e8e8e3;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+`;
+
+const Family = styled.p`
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: #444;
+`;
+
+const Bottom = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 0.8rem;
+`;
+
+const Tags = styled.div`
+  display: flex;
+  gap: 0.3rem;
+`;
+
+const Tag = styled.span`
+  font-size: 0.65rem;
+  color: #444;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #1a1a1a;
+  border-radius: 3px;
+`;
+
+const Price = styled.span`
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #e8e8e3;
+  letter-spacing: -0.01em;
+`;

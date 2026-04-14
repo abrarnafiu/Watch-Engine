@@ -60,9 +60,9 @@ export default function Profile() {
   });
   const [favorites, setFavorites] = useState<Watch[]>([]);
   const [lists, setLists] = useState<WatchList[]>([]);
-  const [activeTab, setActiveTab] = useState<'preferences' | 'favorites' | 'lists'>('preferences');
+  const [collection, setCollection] = useState<Array<{ id: string; watch_id: string; purchase_price: number | null; purchase_date: string | null; notes: string | null; watch: Watch }>>([]);
+  const [activeTab, setActiveTab] = useState<'preferences' | 'favorites' | 'lists' | 'collection'>('preferences');
 
-  // Predefined options for selections
   const watchStyles = ['Dress', 'Sport', 'Dive', 'Pilot', 'Field', 'Racing', 'Smart'];
   const materials = ['Stainless Steel', 'Gold', 'Titanium', 'Ceramic', 'Carbon Fiber', 'Bronze'];
   const complications = ['Chronograph', 'GMT', 'Perpetual Calendar', 'Moon Phase', 'Tourbillon'];
@@ -72,16 +72,13 @@ export default function Profile() {
     fetchProfile();
     fetchFavorites();
     fetchLists();
+    fetchCollection();
   }, []);
 
   async function fetchProfile() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        navigate('/login');
-        return;
-      }
+      if (!user) { navigate('/login'); return; }
 
       const { data, error } = await supabase
         .from('watch_preferences')
@@ -90,11 +87,9 @@ export default function Profile() {
         .single();
 
       if (error) throw error;
-
       if (data) {
         setPreferences(data);
       } else {
-        // Initialize with user_id if no preferences exist
         setPreferences(prev => ({ ...prev, user_id: user.id }));
       }
     } catch (error) {
@@ -119,7 +114,6 @@ export default function Profile() {
 
       if (data && data.length > 0) {
         const watchIds = data.map((fav: Favorite) => fav.watch_id);
-        
         const { data: watchesData, error: watchesError } = await supabase
           .from('watches')
           .select('*')
@@ -146,7 +140,6 @@ export default function Profile() {
       if (error) throw error;
 
       if (data) {
-        // Fetch watches for each list
         const listsWithWatches = await Promise.all(
           data.map(async (list: WatchList) => {
             const { data: itemsData, error: itemsError } = await supabase
@@ -158,27 +151,17 @@ export default function Profile() {
 
             if (itemsData && itemsData.length > 0) {
               const watchIds = itemsData.map((item: Favorite) => item.watch_id);
-              
               const { data: watchesData, error: watchesError } = await supabase
                 .from('watches')
                 .select('*')
                 .in('id', watchIds);
 
               if (watchesError) throw watchesError;
-              
-              return {
-                ...list,
-                items: watchesData || []
-              };
+              return { ...list, items: watchesData || [] };
             }
-            
-            return {
-              ...list,
-              items: []
-            };
+            return { ...list, items: [] };
           })
         );
-
         setLists(listsWithWatches);
       }
     } catch (error) {
@@ -186,11 +169,52 @@ export default function Profile() {
     }
   }
 
+  async function fetchCollection() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data, error } = await supabase
+        .from('user_collection')
+        .select('id, watch_id, purchase_price, purchase_date, notes')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      if (data && data.length > 0) {
+        const watchIds = data.map(item => item.watch_id);
+        const { data: watchesData, error: watchesError } = await supabase
+          .from('watches')
+          .select('*')
+          .in('id', watchIds);
+
+        if (watchesError) throw watchesError;
+
+        const watchMap = new Map((watchesData || []).map(w => [w.id, w]));
+        setCollection(data.map(item => ({
+          ...item,
+          watch: watchMap.get(item.watch_id),
+        })).filter(item => item.watch));
+      }
+    } catch (error) {
+      console.error('Error fetching collection:', error);
+    }
+  }
+
+  const handleRemoveFromCollection = async (collectionId: string) => {
+    try {
+      const { error } = await supabase.from('user_collection').delete().eq('id', collectionId);
+      if (error) throw error;
+      setCollection(prev => prev.filter(item => item.id !== collectionId));
+    } catch (error) {
+      console.error('Error removing from collection:', error);
+    }
+  };
+
   async function updateProfile() {
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-
       if (!user) throw new Error('No user logged in');
 
       const { error } = await supabase
@@ -227,63 +251,40 @@ export default function Profile() {
     if (file) {
       setSelectedImage(file);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviewUrl(reader.result as string);
-      };
+      reader.onloadend = () => { setPreviewUrl(reader.result as string); };
       reader.readAsDataURL(file);
     }
   };
 
   const handleImageUpload = async () => {
     if (!selectedImage) return;
-
     try {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user logged in');
 
-      // Check file size (max 5MB)
-      if (selectedImage.size > 5 * 1024 * 1024) {
-        throw new Error('Image size must be less than 5MB');
-      }
+      if (selectedImage.size > 5 * 1024 * 1024) throw new Error('Image size must be less than 5MB');
+      if (!selectedImage.type.startsWith('image/')) throw new Error('Please upload an image file');
 
-      // Check file type
-      if (!selectedImage.type.startsWith('image/')) {
-        throw new Error('Please upload an image file');
-      }
-
-      // Upload image to Supabase Storage
       const fileExt = selectedImage.name.split('.').pop();
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-      const {error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from('profile-pictures')
-        .upload(fileName, selectedImage, {
-          cacheControl: '3600',
-          upsert: true
-        });
+        .upload(fileName, selectedImage, { cacheControl: '3600', upsert: true });
 
       if (uploadError) {
         if (uploadError.message.includes('duplicate')) {
-          // If file exists, try again with a different timestamp
           const newFileName = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
           const { error: retryError } = await supabase.storage
             .from('profile-pictures')
-            .upload(newFileName, selectedImage, {
-              cacheControl: '3600',
-              upsert: true
-            });
+            .upload(newFileName, selectedImage, { cacheControl: '3600', upsert: true });
           if (retryError) throw retryError;
         } else {
           throw uploadError;
         }
       }
 
-      // Get the public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('profile-pictures')
-        .getPublicUrl(fileName);
-
-      // Update profile with new image URL
+      const { data: { publicUrl } } = supabase.storage.from('profile-pictures').getPublicUrl(fileName);
       const { error: updateError } = await supabase
         .from('watch_preferences')
         .update({ profile_image: publicUrl })
@@ -291,7 +292,6 @@ export default function Profile() {
 
       if (updateError) throw updateError;
 
-      // Update local state
       setPreferences(prev => ({ ...prev, profile_image: publicUrl }));
       setIsEditingProfile(false);
       setSelectedImage(null);
@@ -308,16 +308,8 @@ export default function Profile() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
-
-      const { error } = await supabase
-        .from('favorites')
-        .delete()
-        .eq('user_id', user.id)
-        .eq('watch_id', watchId);
-
+      const { error } = await supabase.from('favorites').delete().eq('user_id', user.id).eq('watch_id', watchId);
       if (error) throw error;
-      
-      // Update local state
       setFavorites(prev => prev.filter(watch => watch.id !== watchId));
     } catch (error) {
       console.error('Error removing favorite:', error);
@@ -326,25 +318,13 @@ export default function Profile() {
 
   const removeFromList = async (listId: string, watchId: string) => {
     try {
-      const { error } = await supabase
-        .from('watch_list_items')
-        .delete()
-        .eq('list_id', listId)
-        .eq('watch_id', watchId);
-
+      const { error } = await supabase.from('watch_list_items').delete().eq('list_id', listId).eq('watch_id', watchId);
       if (error) throw error;
-      
-      // Update local state
-      setLists(prevLists => 
-        prevLists.map(list => {
-        if (list.id === listId) {
-          return {
-            ...list,
-              items: list.items.filter(watch => watch.id !== watchId)
-          };
-        }
-        return list;
-        })
+      setLists(prevLists =>
+        prevLists.map(list => list.id === listId
+          ? { ...list, items: list.items.filter(watch => watch.id !== watchId) }
+          : list
+        )
       );
     } catch (error) {
       console.error('Error removing watch from list:', error);
@@ -353,14 +333,8 @@ export default function Profile() {
 
   const handleDeleteList = async (listId: string) => {
     try {
-      const { error } = await supabase
-        .from('watch_lists')
-        .delete()
-        .eq('id', listId);
-
+      const { error } = await supabase.from('watch_lists').delete().eq('id', listId);
       if (error) throw error;
-      
-      // Update local state
       setLists(prev => prev.filter(list => list.id !== listId));
     } catch (error) {
       console.error('Error deleting list:', error);
@@ -373,1292 +347,1232 @@ export default function Profile() {
     <Container>
       <Navbar />
       <Content>
+        {/* ── Profile Header ── */}
         <ProfileHeader>
-          <Banner />
-          <ProfileInfo>
-            <ProfilePicture>
-              <ProfileImage 
-                src={preferences.profile_image || '/profile-placeholder.png'} 
-                alt={preferences.name || 'Profile'} 
-              />
-              <EditProfilePictureButton onClick={() => setIsEditingProfile(true)}>
-                <EditIcon>📷</EditIcon>
-              </EditProfilePictureButton>
-            </ProfilePicture>
-            <ProfileDetails>
-              <Name>{preferences.name || 'Add your name'}</Name>
-              <Bio>{preferences.bio || 'No bio added yet'}</Bio>
-              <StatsContainer>
-                <StatItem>
-                  <StatNumber>{favorites.length}</StatNumber>
-                  <StatLabel>Favorites</StatLabel>
-                </StatItem>
-                <StatItem>
-                  <StatNumber>{lists.length}</StatNumber>
-                  <StatLabel>Lists</StatLabel>
-                </StatItem>
-                <StatItem>
-                  <StatNumber>{lists.reduce((acc, list) => acc + (list.items?.length || 0), 0)}</StatNumber>
-                  <StatLabel>Watches Saved</StatLabel>
-                </StatItem>
-              </StatsContainer>
-            </ProfileDetails>
-          </ProfileInfo>
-          <LogoutButton onClick={handleLogout}>Logout</LogoutButton>
+          <ProfileTopRow>
+            <ProfileLeft>
+              <ProfilePicture>
+                <ProfileImage
+                  src={preferences.profile_image || '/profile-placeholder.png'}
+                  alt={preferences.name || 'Profile'}
+                />
+                <EditPicBtn onClick={() => setIsEditingProfile(true)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                </EditPicBtn>
+              </ProfilePicture>
+              <ProfileText>
+                <Name>{preferences.name || 'Add your name'}</Name>
+                <Bio>{preferences.bio || 'No bio added yet'}</Bio>
+              </ProfileText>
+            </ProfileLeft>
+            <LogoutButton onClick={handleLogout}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+              Sign Out
+            </LogoutButton>
+          </ProfileTopRow>
+          <StatsRow>
+            <StatCard>
+              <StatNum>{favorites.length}</StatNum>
+              <StatLbl>Favorites</StatLbl>
+            </StatCard>
+            <StatCard>
+              <StatNum>{lists.length}</StatNum>
+              <StatLbl>Lists</StatLbl>
+            </StatCard>
+            <StatCard>
+              <StatNum>{lists.reduce((acc, list) => acc + (list.items?.length || 0), 0)}</StatNum>
+              <StatLbl>Saved</StatLbl>
+            </StatCard>
+            <StatCard>
+              <StatNum>{preferences.preferred_styles.length}</StatNum>
+              <StatLbl>Styles</StatLbl>
+            </StatCard>
+          </StatsRow>
         </ProfileHeader>
 
+        {/* ── Upload Modal ── */}
         {isEditingProfile && (
           <ModalOverlay onClick={() => setIsEditingProfile(false)}>
             <Modal onClick={e => e.stopPropagation()}>
-              <ModalHeader>
+              <ModalHead>
                 <ModalTitle>Change Profile Picture</ModalTitle>
-                <CloseButton onClick={() => setIsEditingProfile(false)}>×</CloseButton>
-              </ModalHeader>
-              <ModalContent>
+                <CloseBtn onClick={() => setIsEditingProfile(false)}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </CloseBtn>
+              </ModalHead>
+              <ModalBody>
                 {previewUrl ? (
-                  <ImagePreview src={previewUrl} alt="Preview" />
+                  <ImgPreview src={previewUrl} alt="Preview" />
                 ) : (
-                  <UploadArea onClick={() => fileInputRef.current?.click()}>
-                    <UploadIcon>📁</UploadIcon>
-                    <UploadText>Click to select an image</UploadText>
-                    <UploadSubtext>or drag and drop</UploadSubtext>
-                  </UploadArea>
+                  <UploadZone onClick={() => fileInputRef.current?.click()}>
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <UploadLabel>Click to choose a photo</UploadLabel>
+                    <UploadHint>JPG, PNG up to 5MB</UploadHint>
+                  </UploadZone>
                 )}
-                <HiddenInput
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImageSelect}
-                  accept="image/*"
-                />
+                <HiddenInput type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" />
                 {previewUrl && (
-                  <ButtonGroup>
-                    <SaveButton onClick={handleImageUpload} disabled={loading}>
-                      {loading ? 'Uploading...' : 'Upload Image'}
-                    </SaveButton>
-                    <CancelButton onClick={() => {
-                      setSelectedImage(null);
-                      setPreviewUrl(null);
-                    }}>
+                  <BtnRow>
+                    <PrimaryBtn onClick={handleImageUpload} disabled={loading}>
+                      {loading ? 'Uploading...' : 'Upload'}
+                    </PrimaryBtn>
+                    <SecondaryBtn onClick={() => { setSelectedImage(null); setPreviewUrl(null); }}>
                       Cancel
-                    </CancelButton>
-                  </ButtonGroup>
+                    </SecondaryBtn>
+                  </BtnRow>
                 )}
-              </ModalContent>
+              </ModalBody>
             </Modal>
           </ModalOverlay>
         )}
 
-        {error && <ErrorMessage>{error}</ErrorMessage>}
+        {error && <ErrorMsg>{error}</ErrorMsg>}
 
-        <TabsContainer>
-          <Tab 
-            active={activeTab === 'preferences'} 
-            onClick={() => setActiveTab('preferences')}
-          >
+        {/* ── Tabs ── */}
+        <TabBar>
+          <TabBtn active={activeTab === 'preferences'} onClick={() => setActiveTab('preferences')}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
             Preferences
-          </Tab>
-          <Tab 
-            active={activeTab === 'favorites'} 
-            onClick={() => setActiveTab('favorites')}
-          >
+          </TabBtn>
+          <TabBtn active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+            </svg>
             Favorites ({favorites.length})
-          </Tab>
-          <Tab 
-            active={activeTab === 'lists'} 
-            onClick={() => setActiveTab('lists')}
-          >
+          </TabBtn>
+          <TabBtn active={activeTab === 'lists'} onClick={() => setActiveTab('lists')}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
             Lists ({lists.length})
-          </Tab>
-        </TabsContainer>
+          </TabBtn>
+          <TabBtn active={activeTab === 'collection'} onClick={() => setActiveTab('collection')}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+            Collection ({collection.length})
+          </TabBtn>
+        </TabBar>
 
+        {/* ── Preferences Tab ── */}
         {activeTab === 'preferences' && (
-          <PreferencesForm>
-            <SectionHeader>
-              <SectionTitle>Watch Preferences</SectionTitle>
+          <GlassCard>
+            <CardHeader>
+              <CardTitle>Watch Preferences</CardTitle>
               {!isEditingPreferences && (
-                <EditButton onClick={() => setIsEditingPreferences(true)}>
-                  Edit Preferences
-                </EditButton>
+                <EditBtn onClick={() => setIsEditingPreferences(true)}>Edit</EditBtn>
               )}
-            </SectionHeader>
+            </CardHeader>
 
             {isEditingPreferences ? (
               <>
-                <Section>
-                  <SectionTitle>Price Range</SectionTitle>
-                  <PriceRangeContainer>
-                    <PriceInput
+                <FormSection>
+                  <FormLabel>Price Range (USD)</FormLabel>
+                  <PriceRow>
+                    <PriceField
                       type="number"
                       value={preferences.price_range_min}
-                      onChange={(e) => setPreferences(prev => ({
-                        ...prev,
-                        price_range_min: parseInt(e.target.value)
-                      }))}
-                      placeholder="Min Price"
+                      onChange={(e) => setPreferences(prev => ({ ...prev, price_range_min: parseInt(e.target.value) }))}
+                      placeholder="Min"
                     />
-                    <span>to</span>
-                    <PriceInput
+                    <PriceDivider>to</PriceDivider>
+                    <PriceField
                       type="number"
                       value={preferences.price_range_max}
-                      onChange={(e) => setPreferences(prev => ({
-                        ...prev,
-                        price_range_max: parseInt(e.target.value)
-                      }))}
-                      placeholder="Max Price"
+                      onChange={(e) => setPreferences(prev => ({ ...prev, price_range_max: parseInt(e.target.value) }))}
+                      placeholder="Max"
                     />
-                  </PriceRangeContainer>
-                </Section>
+                  </PriceRow>
+                </FormSection>
 
-                <Section>
-                  <SectionTitle>Watch Styles</SectionTitle>
-                  <OptionsGrid>
+                <FormSection>
+                  <FormLabel>Watch Styles</FormLabel>
+                  <ChipGrid>
                     {watchStyles.map(style => (
-                      <Checkbox
+                      <Chip
                         key={style}
-                        checked={preferences.preferred_styles.includes(style)}
-                        onChange={(e) => {
-                          setPreferences(prev => ({
-                            ...prev,
-                            preferred_styles: e.target.checked
-                              ? [...prev.preferred_styles, style]
-                              : prev.preferred_styles.filter(s => s !== style)
-                          }));
-                        }}
-                        label={style}
-                      />
+                        selected={preferences.preferred_styles.includes(style)}
+                        onClick={() => setPreferences(prev => ({
+                          ...prev,
+                          preferred_styles: prev.preferred_styles.includes(style)
+                            ? prev.preferred_styles.filter(s => s !== style)
+                            : [...prev.preferred_styles, style]
+                        }))}
+                      >{style}</Chip>
                     ))}
-                  </OptionsGrid>
-                </Section>
+                  </ChipGrid>
+                </FormSection>
 
-                <Section>
-                  <SectionTitle>Materials</SectionTitle>
-                  <OptionsGrid>
+                <FormSection>
+                  <FormLabel>Materials</FormLabel>
+                  <ChipGrid>
                     {materials.map(material => (
-                      <Checkbox
+                      <Chip
                         key={material}
-                        checked={preferences.preferred_materials.includes(material)}
-                        onChange={(e) => {
-                          setPreferences(prev => ({
-                            ...prev,
-                            preferred_materials: e.target.checked
-                              ? [...prev.preferred_materials, material]
-                              : prev.preferred_materials.filter(m => m !== material)
-                          }));
-                        }}
-                        label={material}
-                      />
+                        selected={preferences.preferred_materials.includes(material)}
+                        onClick={() => setPreferences(prev => ({
+                          ...prev,
+                          preferred_materials: prev.preferred_materials.includes(material)
+                            ? prev.preferred_materials.filter(m => m !== material)
+                            : [...prev.preferred_materials, material]
+                        }))}
+                      >{material}</Chip>
                     ))}
-                  </OptionsGrid>
-                </Section>
+                  </ChipGrid>
+                </FormSection>
 
-                <Section>
-                  <SectionTitle>Complications</SectionTitle>
-                  <OptionsGrid>
-                    {complications.map(complication => (
-                      <Checkbox
-                        key={complication}
-                        checked={preferences.preferred_complications.includes(complication)}
-                        onChange={(e) => {
-                          setPreferences(prev => ({
-                            ...prev,
-                            preferred_complications: e.target.checked
-                              ? [...prev.preferred_complications, complication]
-                              : prev.preferred_complications.filter(c => c !== complication)
-                          }));
-                        }}
-                        label={complication}
-                      />
+                <FormSection>
+                  <FormLabel>Complications</FormLabel>
+                  <ChipGrid>
+                    {complications.map(comp => (
+                      <Chip
+                        key={comp}
+                        selected={preferences.preferred_complications.includes(comp)}
+                        onClick={() => setPreferences(prev => ({
+                          ...prev,
+                          preferred_complications: prev.preferred_complications.includes(comp)
+                            ? prev.preferred_complications.filter(c => c !== comp)
+                            : [...prev.preferred_complications, comp]
+                        }))}
+                      >{comp}</Chip>
                     ))}
-                  </OptionsGrid>
-                </Section>
+                  </ChipGrid>
+                </FormSection>
 
-                <Section>
-                  <SectionTitle>Dial Colors</SectionTitle>
-                  <ColorGrid>
+                <FormSection>
+                  <FormLabel>Dial Colors</FormLabel>
+                  <ChipGrid>
                     {colors.map(color => (
-                      <ColorOption
+                      <Chip
                         key={color}
                         selected={preferences.dial_colors.includes(color)}
-                        onClick={() => {
-                          setPreferences(prev => ({
-                            ...prev,
-                            dial_colors: prev.dial_colors.includes(color)
-                              ? prev.dial_colors.filter(c => c !== color)
-                              : [...prev.dial_colors, color]
-                          }));
-                        }}
-                      >
-                        {color}
-                      </ColorOption>
+                        onClick={() => setPreferences(prev => ({
+                          ...prev,
+                          dial_colors: prev.dial_colors.includes(color)
+                            ? prev.dial_colors.filter(c => c !== color)
+                            : [...prev.dial_colors, color]
+                        }))}
+                      >{color}</Chip>
                     ))}
-                  </ColorGrid>
-                </Section>
+                  </ChipGrid>
+                </FormSection>
 
-                <ButtonGroup>
-                  <SaveButton onClick={() => {
-                    updateProfile();
-                    setIsEditingPreferences(false);
-                  }} disabled={loading}>
+                <BtnRow>
+                  <PrimaryBtn onClick={() => { updateProfile(); setIsEditingPreferences(false); }} disabled={loading}>
                     {loading ? 'Saving...' : 'Save Preferences'}
-                  </SaveButton>
-                  <CancelButton onClick={() => setIsEditingPreferences(false)}>
-                    Cancel
-                  </CancelButton>
-                </ButtonGroup>
+                  </PrimaryBtn>
+                  <SecondaryBtn onClick={() => setIsEditingPreferences(false)}>Cancel</SecondaryBtn>
+                </BtnRow>
               </>
             ) : (
-              <PreferencesDisplay>
-                <PreferenceItem>
-                  <Label>Price Range:</Label>
-                  <Value>${preferences.price_range_min} - ${preferences.price_range_max}</Value>
-                </PreferenceItem>
-                
-                <PreferenceItem>
-                  <Label>Watch Styles:</Label>
-                  <Value>{preferences.preferred_styles.length > 0 ? preferences.preferred_styles.join(', ') : 'None selected'}</Value>
-                </PreferenceItem>
-                
-                <PreferenceItem>
-                  <Label>Materials:</Label>
-                  <Value>{preferences.preferred_materials.length > 0 ? preferences.preferred_materials.join(', ') : 'None selected'}</Value>
-                </PreferenceItem>
-                
-                <PreferenceItem>
-                  <Label>Complications:</Label>
-                  <Value>{preferences.preferred_complications.length > 0 ? preferences.preferred_complications.join(', ') : 'None selected'}</Value>
-                </PreferenceItem>
-                
-                <PreferenceItem>
-                  <Label>Dial Colors:</Label>
-                  <Value>{preferences.dial_colors.length > 0 ? preferences.dial_colors.join(', ') : 'None selected'}</Value>
-                </PreferenceItem>
-              </PreferencesDisplay>
+              <PrefsGrid>
+                <PrefCard>
+                  <PrefLabel>Price Range</PrefLabel>
+                  <PrefValue>${preferences.price_range_min.toLocaleString()} &mdash; ${preferences.price_range_max.toLocaleString()}</PrefValue>
+                </PrefCard>
+                <PrefCard>
+                  <PrefLabel>Styles</PrefLabel>
+                  <TagList>
+                    {preferences.preferred_styles.length > 0
+                      ? preferences.preferred_styles.map(s => <Tag key={s}>{s}</Tag>)
+                      : <PrefMuted>None selected</PrefMuted>}
+                  </TagList>
+                </PrefCard>
+                <PrefCard>
+                  <PrefLabel>Materials</PrefLabel>
+                  <TagList>
+                    {preferences.preferred_materials.length > 0
+                      ? preferences.preferred_materials.map(m => <Tag key={m}>{m}</Tag>)
+                      : <PrefMuted>None selected</PrefMuted>}
+                  </TagList>
+                </PrefCard>
+                <PrefCard>
+                  <PrefLabel>Complications</PrefLabel>
+                  <TagList>
+                    {preferences.preferred_complications.length > 0
+                      ? preferences.preferred_complications.map(c => <Tag key={c}>{c}</Tag>)
+                      : <PrefMuted>None selected</PrefMuted>}
+                  </TagList>
+                </PrefCard>
+                <PrefCard>
+                  <PrefLabel>Dial Colors</PrefLabel>
+                  <TagList>
+                    {preferences.dial_colors.length > 0
+                      ? preferences.dial_colors.map(c => <Tag key={c}>{c}</Tag>)
+                      : <PrefMuted>None selected</PrefMuted>}
+                  </TagList>
+                </PrefCard>
+              </PrefsGrid>
             )}
-          </PreferencesForm>
+          </GlassCard>
         )}
 
+        {/* ── Favorites Tab ── */}
         {activeTab === 'favorites' && (
-          <FavoritesSection>
-            <SectionTitle>My Favorites</SectionTitle>
+          <GlassCard>
+            <CardTitle>My Favorites</CardTitle>
             {favorites.length === 0 ? (
-              <EmptyState>
-                <EmptyIcon>❤️</EmptyIcon>
-                <EmptyText>You haven't favorited any watches yet</EmptyText>
-                <BrowseButton onClick={() => navigate('/brands')}>Browse Watches</BrowseButton>
-              </EmptyState>
+              <EmptyBox>
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+                </svg>
+                <EmptyTitle>No favorites yet</EmptyTitle>
+                <EmptyHint>Browse watches and tap the heart to save them here.</EmptyHint>
+                <PrimaryBtn onClick={() => navigate('/brands')}>Browse Watches</PrimaryBtn>
+              </EmptyBox>
             ) : (
               <WatchGrid>
                 {favorites.map((watch) => (
                   <WatchCard key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
-                    <WatchImage src={getImageUrl(watch.image_url)} alt={watch.model_name} />
-                    <WatchInfo>
-                      <ModelName>{watch.model_name}</ModelName>
-                      <FamilyName>{watch.family_name}</FamilyName>
-                      <Details>
-                        <Year>{watch.year_produced}</Year>
-                        {watch.price_eur && <Price>€{watch.price_eur.toLocaleString()}</Price>}
-                      </Details>
-                    </WatchInfo>
-                    <RemoveButton 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleRemoveFavorite(watch.id);
-                      }}
-                    >
-                      ×
-                    </RemoveButton>
+                    <WatchImgWrap>
+                      <WatchImg src={getImageUrl(watch.image_url)} alt={watch.model_name} />
+                      <ImgOverlay />
+                      <RemoveBtn onClick={(e) => { e.stopPropagation(); handleRemoveFavorite(watch.id); }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </RemoveBtn>
+                    </WatchImgWrap>
+                    <WatchBody>
+                      <WatchName>{watch.model_name}</WatchName>
+                      <WatchFamily>{watch.family_name}</WatchFamily>
+                      <WatchFooter>
+                        <WatchYear>{watch.year_produced}</WatchYear>
+                        {watch.price_eur && <WatchPrice>${watch.price_eur.toLocaleString()}</WatchPrice>}
+                      </WatchFooter>
+                    </WatchBody>
                   </WatchCard>
                 ))}
               </WatchGrid>
             )}
-          </FavoritesSection>
+          </GlassCard>
         )}
 
+        {/* ── Lists Tab ── */}
         {activeTab === 'lists' && (
-          <ListsSection>
-            <SectionTitle>My Lists</SectionTitle>
+          <GlassCard>
+            <CardTitle>My Lists</CardTitle>
             {lists.length === 0 ? (
-              <EmptyState>
-                <EmptyIcon>📋</EmptyIcon>
-                <EmptyText>You haven't created any lists yet</EmptyText>
-                <BrowseButton onClick={() => navigate('/brands')}>Browse Watches</BrowseButton>
-              </EmptyState>
+              <EmptyBox>
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+                </svg>
+                <EmptyTitle>No lists yet</EmptyTitle>
+                <EmptyHint>Create a list from any watch detail page.</EmptyHint>
+                <PrimaryBtn onClick={() => navigate('/brands')}>Browse Watches</PrimaryBtn>
+              </EmptyBox>
             ) : (
-              <ListsContainer>
+              <ListStack>
                 {lists.map((list: WatchList) => (
-                  <ListCard key={list.id}>
-                    <ListHeader>
-                      <ListName>{list.name}</ListName>
-                      <ListActions>
-                        <ListActionButton onClick={() => handleDeleteList(list.id)}>
-                          🗑️
-                        </ListActionButton>
-                      </ListActions>
-                    </ListHeader>
+                  <ListBlock key={list.id}>
+                    <ListHead>
+                      <ListTitle>{list.name}<ListCount>{list.items?.length || 0} watches</ListCount></ListTitle>
+                      <DeleteBtn onClick={() => handleDeleteList(list.id)}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                      </DeleteBtn>
+                    </ListHead>
                     {list.items && list.items.length > 0 ? (
-                      <ListWatches>
+                      <ListItems>
                         {list.items.map((watch: Watch) => (
-                          <ListWatchItem key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
-                            <ListWatchImage src={getImageUrl(watch.image_url)} alt={watch.model_name} />
-                            <ListWatchInfo>
-                              <ListWatchName>{watch.model_name}</ListWatchName>
-                              <ListWatchDetails>
-                                {watch.price_eur && <ListWatchPrice>€{watch.price_eur.toLocaleString()}</ListWatchPrice>}
-                              </ListWatchDetails>
-                            </ListWatchInfo>
-                            <RemoveButton 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeFromList(list.id, watch.id);
-                              }}
-                            >
-                              ×
-                            </RemoveButton>
-                          </ListWatchItem>
+                          <ListItem key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
+                            <ListItemImg src={getImageUrl(watch.image_url)} alt={watch.model_name} />
+                            <ListItemText>
+                              <ListItemName>{watch.model_name}</ListItemName>
+                              {watch.price_eur && <ListItemPrice>${watch.price_eur.toLocaleString()}</ListItemPrice>}
+                            </ListItemText>
+                            <RemoveBtn onClick={(e) => { e.stopPropagation(); removeFromList(list.id, watch.id); }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                              </svg>
+                            </RemoveBtn>
+                          </ListItem>
                         ))}
-                      </ListWatches>
+                      </ListItems>
                     ) : (
-                      <EmptyListState>
-                        <EmptyListText>No watches in this list</EmptyListText>
-                      </EmptyListState>
+                      <ListEmpty>No watches in this list yet</ListEmpty>
                     )}
-                  </ListCard>
+                  </ListBlock>
                 ))}
-              </ListsContainer>
+              </ListStack>
             )}
-          </ListsSection>
+          </GlassCard>
+        )}
+        {/* ── Collection Tab ── */}
+        {activeTab === 'collection' && (
+          <GlassCard>
+            <CardTitle>My Collection</CardTitle>
+            {collection.length > 0 && (
+              <CollectionStats>
+                <StatCard>
+                  <StatNum>{collection.length}</StatNum>
+                  <StatLbl>Watches</StatLbl>
+                </StatCard>
+                <StatCard>
+                  <StatNum>${collection.reduce((sum, item) => sum + (item.watch?.price_eur || 0), 0).toLocaleString()}</StatNum>
+                  <StatLbl>Market Value</StatLbl>
+                </StatCard>
+                <StatCard>
+                  <StatNum>${collection.reduce((sum, item) => sum + (item.purchase_price || 0), 0).toLocaleString()}</StatNum>
+                  <StatLbl>Total Paid</StatLbl>
+                </StatCard>
+              </CollectionStats>
+            )}
+            {collection.length === 0 ? (
+              <EmptyBox>
+                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                </svg>
+                <EmptyTitle>No watches in your collection</EmptyTitle>
+                <EmptyHint>Add watches you own from any watch detail page.</EmptyHint>
+                <PrimaryBtn onClick={() => navigate('/brands')}>Browse Watches</PrimaryBtn>
+              </EmptyBox>
+            ) : (
+              <WatchGrid>
+                {collection.map((item) => (
+                  <WatchCard key={item.id} onClick={() => navigate(`/watch/${item.watch.id}`)}>
+                    <WatchImgWrap>
+                      <WatchImg src={getImageUrl(item.watch.image_url)} alt={item.watch.model_name} />
+                      <ImgOverlay />
+                      <RemoveBtn onClick={(e) => { e.stopPropagation(); handleRemoveFromCollection(item.id); }}>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                      </RemoveBtn>
+                    </WatchImgWrap>
+                    <WatchBody>
+                      <WatchName>{item.watch.model_name}</WatchName>
+                      <WatchFamily>{item.watch.family_name}</WatchFamily>
+                      <CollectionMeta>
+                        {item.purchase_price && (
+                          <CollectionPaid>Paid: ${item.purchase_price.toLocaleString()}</CollectionPaid>
+                        )}
+                        {item.watch.price_eur && (
+                          <WatchPrice>Market: ${item.watch.price_eur.toLocaleString()}</WatchPrice>
+                        )}
+                        {item.purchase_price && item.watch.price_eur && (
+                          <CollectionGain gained={item.watch.price_eur >= item.purchase_price}>
+                            {item.watch.price_eur >= item.purchase_price ? '+' : ''}
+                            ${(item.watch.price_eur - item.purchase_price).toLocaleString()}
+                          </CollectionGain>
+                        )}
+                      </CollectionMeta>
+                      {item.purchase_date && (
+                        <CollectionDate>Purchased: {new Date(item.purchase_date).toLocaleDateString()}</CollectionDate>
+                      )}
+                    </WatchBody>
+                  </WatchCard>
+                ))}
+              </WatchGrid>
+            )}
+          </GlassCard>
         )}
       </Content>
     </Container>
   );
 }
 
-// Styled Components
+/* ════════════════════════════════════════
+   STYLED COMPONENTS
+   ════════════════════════════════════════ */
+
 const Container = styled.div`
   min-height: 100vh;
-  background: radial-gradient(ellipse at top, #1a1a2e 0%,rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
-  font-family: 'Montserrat', sans-serif;
+  background: #0a0a0a;
+  font-family: 'Inter', sans-serif;
 `;
 
 const Content = styled.div`
-  max-width: 1400px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 2rem;
+  padding: 1.5rem 2rem 4rem;
 `;
 
-const ProfileHeader = styled.div`
-  position: relative;
-  margin-bottom: 3rem;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  backdrop-filter: blur(20px);
-  border-radius: 32px;
-  overflow: hidden;
-  box-shadow: 0 25px 50px rgba(0,0,0,0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 3rem;
-`;
-
-const Banner = styled.div`
-  height: 240px;
-  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
-  position: relative;
-  
-  &::after {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: linear-gradient(45deg, rgba(255,255,255,0.1) 0%, transparent 100%);
-  }
-`;
-
-const ProfileInfo = styled.div`
+const Loading = styled.div`
+  min-height: 100vh;
   display: flex;
   align-items: center;
-  gap: 3rem;
-  position: relative;
-  z-index: 2;
+  justify-content: center;
+  font-size: 1.2rem;
+  color: rgba(255,255,255,0.5);
+  font-family: 'Inter', sans-serif;
+  background: #0a0a0a;
+`;
+
+const ErrorMsg = styled.div`
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  margin-bottom: 1.5rem;
+  font-size: 0.9rem;
+`;
+
+/* ── Profile Header ── */
+
+const ProfileHeader = styled.div`
+  border-bottom: 1px solid #141414;
+  padding: 2rem 0;
+  margin-bottom: 1.5rem;
+`;
+
+const ProfileTopRow = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+`;
+
+const ProfileLeft = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 2rem;
 `;
 
 const ProfilePicture = styled.div`
   position: relative;
-  width: 180px;
-  height: 180px;
+  flex-shrink: 0;
 `;
 
 const ProfileImage = styled.img`
-  width: 100%;
-  height: 100%;
+  width: 100px;
+  height: 100px;
   border-radius: 50%;
-  border: 6px solid white;
   object-fit: cover;
-  background-color: #f0f0f0;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
-  transition: transform 0.3s ease;
-  
-  &:hover {
-    transform: scale(1.05);
-  }
+  border: 3px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.05);
 `;
 
-const EditProfilePictureButton = styled.button`
+const EditPicBtn = styled.button`
   position: absolute;
-  bottom: 8px;
-  right: 8px;
-  width: 48px;
-  height: 48px;
+  bottom: -2px;
+  right: -2px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
-  border: none;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.8);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: white;
-  font-size: 1.4rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
 
   &:hover {
-    transform: scale(1.1);
-    box-shadow: 0 12px 25px rgba(0,0,0,0.3);
+    background: rgba(255,255,255,0.2);
+    color: #fff;
   }
 `;
 
-const EditIcon = styled.span`
-  display: flex;
-  align-items: center;
-  justify-content: center;
-`;
-
-const ProfileDetails = styled.div`
-  flex: 1;
+const ProfileText = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 0.35rem;
 `;
 
-const Name = styled.h2`
+const Name = styled.h1`
   margin: 0;
-  font-size: 3rem;
-  font-weight: 700;
-  color: #ffffff;
-  font-family: 'Montserrat', sans-serif;
-  letter-spacing: -0.02em;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  font-family: 'Georgia', serif;
+  font-size: 1.5rem;
+  font-weight: 400;
+  color: #f5f5f0;
+  line-height: 1.2;
 `;
 
 const Bio = styled.p`
   margin: 0;
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 1.3rem;
+  color: rgba(255,255,255,0.5);
+  font-size: 0.95rem;
   font-weight: 400;
-  font-family: 'Montserrat', sans-serif;
-  line-height: 1.6;
-  max-width: 600px;
-`;
-
-const StatsContainer = styled.div`
-  display: flex;
-  gap: 3rem;
-  margin-top: 1rem;
-`;
-
-const StatItem = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 1.5rem 2rem;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 20px;
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  transition: all 0.3s ease;
-  
-  &:hover {
-    transform: translateY(-5px);
-    background: rgba(255, 255, 255, 0.15);
-  }
-`;
-
-const StatNumber = styled.span`
-  font-size: 2.5rem;
-  font-weight: 700;
-  color: #ffffff;
-  font-family: 'Montserrat', sans-serif;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
-`;
-
-const StatLabel = styled.span`
-  font-size: 1rem;
-  color: rgba(255, 255, 255, 0.8);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  margin-top: 0.5rem;
+  max-width: 400px;
+  line-height: 1.5;
 `;
 
 const LogoutButton = styled.button`
-  position: absolute;
-  top: 1.5rem;
-  right: 1.5rem;
-  padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 600;
-  font-size: 0.95rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 8px 20px rgba(238, 90, 36, 0.3);
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 25px rgba(238, 90, 36, 0.4);
-  }
-`;
-
-const TabsContainer = styled.div`
   display: flex;
-  margin-bottom: 3rem;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 0.5rem;
-`;
-
-const Tab = styled.button<{ active: boolean }>`
-  flex: 1;
-  padding: 1.5rem 2rem;
-  background: ${props => props.active ? 'rgba(255, 255, 255, 0.2)' : 'transparent'};
-  color: ${props => props.active ? '#ffffff' : 'rgba(255, 255, 255, 0.7)'};
-  border: none;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.2rem;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 10px;
   cursor: pointer;
-  font-size: 1.1rem;
-  font-weight: 600;
   font-family: 'Montserrat', sans-serif;
-  transition: all 0.3s ease;
-  position: relative;
-  border-radius: 16px;
-  backdrop-filter: blur(10px);
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
 
   &:hover {
-    background: ${props => props.active ? 'rgba(255, 255, 255, 0.25)' : 'rgba(255, 255, 255, 0.1)'};
-    color: #ffffff;
-    transform: translateY(-2px);
-  }
-
-  &::after {
-    content: '';
-    position: absolute;
-    bottom: 0;
-    left: 50%;
-    transform: translateX(-50%);
-    width: ${props => props.active ? '60%' : '0%'};
-    height: 3px;
-    background: ${props => props.active ? 'white' : 'transparent'};
-    transition: width 0.3s ease;
+    background: rgba(239, 68, 68, 0.2);
+    color: #fecaca;
   }
 `;
 
-const PreferencesForm = styled.div`
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  backdrop-filter: blur(20px);
-  padding: 3rem;
-  border-radius: 32px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+const StatsRow = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+`;
+
+const StatCard = styled.div`
+  text-align: center;
+  padding: 1rem;
+  border-right: 1px solid #141414;
+  &:last-child { border-right: none; }
+`;
+
+const StatNum = styled.div`
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.2;
+`;
+
+const StatLbl = styled.div`
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.4);
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-top: 0.25rem;
+`;
+
+/* ── Tabs ── */
+
+const TabBar = styled.div`
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #141414;
   margin-bottom: 2rem;
 `;
 
-const SectionHeader = styled.div`
+const TabBtn = styled.button<{ active: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.75rem 1.25rem;
+  background: none;
+  color: ${p => p.active ? '#e8e8e3' : '#4a4a4a'};
+  border: none;
+  border-bottom: 2px solid ${p => p.active ? '#e8e8e3' : 'transparent'};
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-family: inherit;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+
+  &:hover { color: ${p => p.active ? '#e8e8e3' : '#888'}; }
+
+  svg { opacity: ${p => p.active ? 1 : 0.4}; }
+`;
+
+/* ── Glass Card (shared container for tab content) ── */
+
+const GlassCard = styled.div`
+  padding: 0;
+`;
+
+const CardHeader = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
-  padding-bottom: 1rem;
-  border-bottom: 2px solid rgba(102, 126, 234, 0.1);
 `;
 
-const SectionTitle = styled.h2`
-  color: #ffffff;
-  font-size: 2rem;
-  margin: 0 0 1.5rem 0;
-  font-weight: 600;
+const CardTitle = styled.h2`
+  margin: 0 0 1.5rem;
+  font-family: 'Georgia', serif;
+  font-size: 1.2rem;
+  font-weight: 400;
+  color: #f5f5f0;
+`;
+
+const EditBtn = styled.button`
+  padding: 0.5rem 1.2rem;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.7);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  cursor: pointer;
   font-family: 'Montserrat', sans-serif;
-  letter-spacing: -0.01em;
-  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+  }
 `;
 
-const PriceRangeContainer = styled.div`
+/* ── Preferences Display ── */
+
+const PrefsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1rem;
+`;
+
+const PrefCard = styled.div`
+  padding: 1.25rem 1.5rem;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+`;
+
+const PrefLabel = styled.div`
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.35);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.6rem;
+`;
+
+const PrefValue = styled.div`
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 1.05rem;
+`;
+
+const PrefMuted = styled.span`
+  color: rgba(255,255,255,0.25);
+  font-size: 0.9rem;
+  font-style: italic;
+`;
+
+const TagList = styled.div`
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+`;
+
+const Tag = styled.span`
+  display: inline-block;
+  padding: 0.3rem 0.75rem;
+  background: rgba(99, 102, 241, 0.15);
+  color: #a5b4fc;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 500;
+`;
+
+/* ── Preferences Edit Form ── */
+
+const FormSection = styled.div`
+  margin-bottom: 2rem;
+`;
+
+const FormLabel = styled.div`
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.6);
+  margin-bottom: 0.75rem;
+`;
+
+const PriceRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 1.5rem;
-  background: rgba(102, 126, 234, 0.05);
-  padding: 2rem;
-  border-radius: 16px;
-  border: 1px solid rgba(102, 126, 234, 0.1);
+  gap: 1rem;
 `;
 
-const PriceInput = styled.input`
-  padding: 1rem 1.5rem;
-  border: 2px solid rgba(102, 126, 234, 0.2);
-  border-radius: 12px;
-  width: 180px;
+const PriceField = styled.input`
+  padding: 0.75rem 1rem;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  color: #ffffff;
   font-family: 'Montserrat', sans-serif;
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 500;
-  transition: all 0.3s ease;
-  background: white;
+  width: 160px;
+  transition: all 0.2s ease;
 
   &:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    border-color: rgba(99, 102, 241, 0.5);
+    background: rgba(255,255,255,0.08);
   }
 
-  &::placeholder {
-    color: #a0aec0;
-    font-weight: 400;
-  }
+  &::placeholder { color: rgba(255,255,255,0.25); }
 `;
 
-const OptionsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1.5rem;
-  background: rgba(102, 126, 234, 0.02);
-  padding: 2rem;
-  border-radius: 16px;
-  border: 1px solid rgba(102, 126, 234, 0.05);
-`;
-
-const ColorGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 1rem;
-  background: rgba(102, 126, 234, 0.02);
-  padding: 2rem;
-  border-radius: 16px;
-  border: 1px solid rgba(102, 126, 234, 0.05);
-`;
-
-const ColorOption = styled.div<{ selected: boolean }>`
-  padding: 1rem 0.75rem;
-  text-align: center;
-  border: 2px solid ${props => props.selected ? '#667eea' : 'rgba(102, 126, 234, 0.2)'};
-  border-radius: 12px;
-  cursor: pointer;
-  background: ${props => props.selected ? 'linear-gradient(135deg, #667eea 0%, #ffffff 100%)' : 'white'};
-  color: ${props => props.selected ? 'white' : '#4a5568'};
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
+const PriceDivider = styled.span`
+  color: rgba(255,255,255,0.3);
   font-size: 0.9rem;
-  transition: all 0.3s ease;
-  box-shadow: ${props => props.selected ? '0 8px 20px rgba(102, 126, 234, 0.3)' : '0 2px 8px rgba(0,0,0,0.05)'};
-
-  &:hover {
-    border-color: #667eea;
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(102, 126, 234, 0.2);
-  }
 `;
 
-const SaveButton = styled.button`
-  padding: 1rem 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  font-family: 'Montserrat', sans-serif;
-  transition: all 0.3s ease;
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 25px rgba(102, 126, 234, 0.4);
-  }
-
-  &:disabled {
-    background: #cbd5e0;
-    cursor: not-allowed;
-    transform: none;
-    box-shadow: none;
-  }
-`;
-
-const Loading = styled.div`
-  text-align: center;
-  padding: 4rem 2rem;
-  font-size: 1.4rem;
-  color: #a0aec0;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-`;
-
-const ErrorMessage = styled.div`
-  color: #e53e3e;
-  background: rgba(229, 62, 62, 0.1);
-  padding: 1.5rem;
-  border-radius: 12px;
-  margin-bottom: 2rem;
-  border: 1px solid rgba(229, 62, 62, 0.2);
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-`;
-
-interface CheckboxProps {
-  checked: boolean;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  label: string;
-}
-
-const Checkbox = ({ checked, onChange, label }: CheckboxProps) => (
-  <CheckboxContainer>
-    <input
-      type="checkbox"
-      checked={checked}
-      onChange={onChange}
-      id={label}
-    />
-    <label htmlFor={label}>{label}</label>
-  </CheckboxContainer>
-);
-
-const CheckboxContainer = styled.div`
+const ChipGrid = styled.div`
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+`;
+
+const Chip = styled.button<{ selected: boolean }>`
+  padding: 0.55rem 1.1rem;
+  background: ${p => p.selected ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255,255,255,0.04)'};
+  color: ${p => p.selected ? '#a5b4fc' : 'rgba(255,255,255,0.5)'};
+  border: 1px solid ${p => p.selected ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.08)'};
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: 0.85rem;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: ${p => p.selected ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255,255,255,0.08)'};
+    color: ${p => p.selected ? '#c4b5fd' : 'rgba(255,255,255,0.7)'};
+  }
+`;
+
+/* ── Buttons ── */
+
+const BtnRow = styled.div`
+  display: flex;
   gap: 0.75rem;
-  padding: 0.75rem;
-  background: white;
-  border-radius: 12px;
-  border: 1px solid rgba(102, 126, 234, 0.1);
-  transition: all 0.3s ease;
-
-  &:hover {
-    border-color: rgba(102, 126, 234, 0.3);
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.1);
-  }
-
-  input[type="checkbox"] {
-    width: 18px;
-    height: 18px;
-    accent-color: #667eea;
-  }
-
-  label {
-    cursor: pointer;
-    font-family: 'Montserrat', sans-serif;
-    font-weight: 500;
-    color: #4a5568;
-    font-size: 0.95rem;
-  }
-`;
-
-const EditButton = styled.button`
-  padding: 0.75rem 1.5rem;
-  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  align-self: flex-start;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  font-size: 0.95rem;
-  transition: all 0.3s ease;
-  box-shadow: 0 6px 15px rgba(102, 126, 234, 0.3);
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
-  }
-`;
-
-const ButtonGroup = styled.div`
-  display: flex;
-  gap: 1.5rem;
   margin-top: 2rem;
   justify-content: center;
 `;
 
-const CancelButton = styled.button`
-  padding: 1rem 2rem;
-  background: #718096;
-  color: white;
+const PrimaryBtn = styled.button`
+  padding: 0.65rem 1.5rem;
+  background: #f5f5f0;
+  color: #0a0a0a;
   border: none;
-  border-radius: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 0.8rem;
+  transition: opacity 0.15s;
+  &:hover { opacity: 0.85; }
+  &:disabled { opacity: 0.3; cursor: default; }
+`;
+
+const SecondaryBtn = styled.button`
+  padding: 0.75rem 1.5rem;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.6);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
   cursor: pointer;
   font-family: 'Montserrat', sans-serif;
-  font-weight: 600;
-  font-size: 1rem;
-  transition: all 0.3s ease;
+  font-weight: 500;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
 
   &:hover {
-    background: #4a5568;
-    transform: translateY(-2px);
+    background: rgba(255,255,255,0.1);
+    color: rgba(255,255,255,0.8);
   }
 `;
 
-const Section = styled.div`
-  margin-bottom: 3rem;
-  padding: 2rem;
-  background: rgba(102, 126, 234, 0.02);
-  border-radius: 16px;
-  border: 1px solid rgba(102, 126, 234, 0.05);
-`;
-
-const PreferencesDisplay = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  padding: 2rem;
-  background: rgba(102, 126, 234, 0.02);
-  border-radius: 16px;
-  border: 1px solid rgba(102, 126, 234, 0.1);
-`;
-
-const PreferenceItem = styled.div`
-  display: flex;
-  gap: 1.5rem;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
-  background: white;
-  border-radius: 12px;
-  transition: all 0.3s ease;
-  
-  &:hover {
-    background: rgba(102, 126, 234, 0.05);
-    transform: translateX(8px);
-  }
-  
-  &:last-child {
-    border-bottom: none;
-  }
-`;
-
-const Label = styled.span`
-  font-weight: 500;
-  color: #4a5568;
-  min-width: 140px;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 0.95rem;
-`;
-
-const Value = styled.span`
-  color: #ffffff;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  font-size: 0.95rem;
-`;
+/* ── Modal ── */
 
 const ModalOverlay = styled.div`
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0,0,0,0.6);
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(8px);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  backdrop-filter: blur(10px);
 `;
 
 const Modal = styled.div`
-  background: white;
+  background: #1a1a2e;
+  border: 1px solid rgba(255,255,255,0.1);
   border-radius: 20px;
   width: 90%;
-  max-width: 600px;
-  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  max-width: 480px;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
 `;
 
-const ModalHeader = styled.div`
+const ModalHead = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem 2rem;
-  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
-  background: rgba(102, 126, 234, 0.02);
-  border-radius: 20px 20px 0 0;
+  padding: 1.25rem 1.75rem;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
 `;
 
 const ModalTitle = styled.h3`
   margin: 0;
   color: #ffffff;
-  font-family: 'Montserrat', sans-serif;
+  font-size: 1.1rem;
   font-weight: 600;
-  font-size: 1.4rem;
 `;
 
-const CloseButton = styled.button`
+const CloseBtn = styled.button`
   background: none;
   border: none;
-  font-size: 1.8rem;
+  color: rgba(255,255,255,0.4);
   cursor: pointer;
-  color: #718096;
-  padding: 0;
-  line-height: 1;
-  transition: color 0.3s ease;
-  font-family: 'Montserrat', sans-serif;
-
-  &:hover {
-    color: #4a5568;
-  }
+  padding: 4px;
+  display: flex;
+  transition: color 0.2s;
+  &:hover { color: #fff; }
 `;
 
-const ModalContent = styled.div`
-  padding: 2.5rem;
+const ModalBody = styled.div`
+  padding: 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.25rem;
 `;
 
-const UploadArea = styled.div`
+const UploadZone = styled.div`
   width: 100%;
-  height: 240px;
-  border: 3px dashed rgba(102, 126, 234, 0.3);
-  border-radius: 16px;
+  height: 200px;
+  border: 2px dashed rgba(255,255,255,0.12);
+  border-radius: 14px;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 0.75rem;
   cursor: pointer;
-  transition: all 0.3s ease;
-  background: rgba(102, 126, 234, 0.02);
+  transition: all 0.2s ease;
+  background: rgba(255,255,255,0.02);
 
   &:hover {
-    border-color: #667eea;
-    background: rgba(102, 126, 234, 0.05);
-    transform: scale(1.02);
+    border-color: rgba(99, 102, 241, 0.4);
+    background: rgba(99, 102, 241, 0.05);
   }
 `;
 
-const UploadIcon = styled.span`
-  font-size: 4rem;
-  margin-bottom: 1rem;
-`;
-
-const UploadText = styled.p`
+const UploadLabel = styled.p`
   margin: 0;
-  font-size: 1.3rem;
-  color: #ffffff;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 400;
+  color: rgba(255,255,255,0.6);
+  font-size: 0.95rem;
+  font-weight: 500;
 `;
 
-const UploadSubtext = styled.p`
+const UploadHint = styled.p`
   margin: 0;
-  font-size: 1rem;
-  color: #718096;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 400;
+  color: rgba(255,255,255,0.25);
+  font-size: 0.8rem;
 `;
 
-const HiddenInput = styled.input`
-  display: none;
-`;
+const HiddenInput = styled.input`display: none;`;
 
-const ImagePreview = styled.img`
+const ImgPreview = styled.img`
   max-width: 100%;
-  max-height: 350px;
+  max-height: 280px;
   object-fit: contain;
-  border-radius: 16px;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.1);
+  border-radius: 12px;
 `;
 
-const FavoritesSection = styled.div`
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  backdrop-filter: blur(20px);
-  padding: 3rem;
-  border-radius: 32px;
-  box-shadow: 0 25px 50px rgba(0,0,0,0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  margin-bottom: 2rem;
-`;
+/* ── Watch Grid (Favorites) ── */
 
 const WatchGrid = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 1.25rem;
 `;
 
 const WatchCard = styled.div`
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  border-radius: 20px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 15px 35px rgba(0,0,0,0.2);
-  transition: all 0.3s ease-in-out;
   cursor: pointer;
-  position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
+  transition: all 0.25s ease;
 
   &:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 25px 50px rgba(0,0,0,0.3);
-    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-4px);
+    border-color: rgba(255,255,255,0.15);
+    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
   }
 `;
 
-const WatchImage = styled.img`
+const WatchImgWrap = styled.div`
+  position: relative;
+  overflow: hidden;
+`;
+
+const WatchImg = styled.img`
   width: 100%;
   height: 200px;
   object-fit: cover;
+  display: block;
 `;
 
-const WatchInfo = styled.div`
-  padding: 1.5rem;
-`;
-
-const ModelName = styled.h3`
-  margin: 0;
-  color: #ffffff;
-  font-size: 1.3rem;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-`;
-
-const FamilyName = styled.p`
-  color: rgba(255, 255, 255, 0.8);
-  margin: 0.5rem 0;
-  font-size: 1rem;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-`;
-
-const Details = styled.div`
-  display: flex;
-  justify-content: space-between;
-  margin-top: 1rem;
-  align-items: center;
-`;
-
-const Year = styled.span`
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 0.95rem;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-`;
-
-const Price = styled.span`
-  color: #4ade80;
-  font-weight: 700;
-  font-size: 1.1rem;
-  font-family: 'Montserrat', sans-serif;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.3);
-`;
-
-const RemoveButton = styled.button`
+const ImgOverlay = styled.div`
   position: absolute;
-  top: 0.75rem;
-  right: 0.75rem;
-  width: 32px;
-  height: 32px;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 50%);
+  pointer-events: none;
+`;
+
+const RemoveBtn = styled.button`
+  position: absolute;
+  top: 0.6rem;
+  right: 0.6rem;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(4px);
   border: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.4rem;
   cursor: pointer;
-  color: #e53e3e;
-  transition: all 0.3s ease;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  color: rgba(255,255,255,0.7);
+  transition: all 0.15s ease;
+  opacity: 0;
+
+  ${WatchCard}:hover &,
+  ${() => ListItem}:hover & {
+    opacity: 1;
+  }
 
   &:hover {
-    background: #e53e3e;
-    color: white;
-    transform: scale(1.1);
+    background: rgba(239, 68, 68, 0.8);
+    color: #fff;
   }
 `;
 
-const ListsSection = styled.div`
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
-  backdrop-filter: blur(20px);
-  padding: 3rem;
-  border-radius: 32px;
-  box-shadow: 0 25px 50px rgba(0,0,0,0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+const WatchBody = styled.div`
+  padding: 1.1rem 1.25rem;
 `;
 
-const ListsContainer = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
-`;
-
-const ListCard = styled.div`
-  background: rgba(102, 126, 234, 0.02);
-  border-radius: 16px;
+const WatchName = styled.h3`
+  margin: 0;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-weight: 600;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-  border: 1px solid rgba(102, 126, 234, 0.1);
 `;
 
-const ListHeader = styled.div`
+const WatchFamily = styled.p`
+  margin: 0.3rem 0 0;
+  color: rgba(255,255,255,0.4);
+  font-size: 0.8rem;
+  font-weight: 500;
+`;
+
+const WatchFooter = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 1.5rem 2rem;
-  background: rgba(102, 126, 234, 0.05);
-  border-bottom: 1px solid rgba(102, 126, 234, 0.1);
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
 `;
 
-const ListName = styled.h3`
+const WatchYear = styled.span`
+  color: rgba(255,255,255,0.3);
+  font-size: 0.8rem;
+  font-weight: 500;
+`;
+
+const WatchPrice = styled.span`
+  color: #4ade80;
+  font-weight: 700;
+  font-size: 0.9rem;
+`;
+
+/* ── Lists ── */
+
+const ListStack = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+`;
+
+const ListBlock = styled.div`
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  overflow: hidden;
+`;
+
+const ListHead = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+`;
+
+const ListTitle = styled.h3`
   margin: 0;
   color: #ffffff;
-  font-size: 1.3rem;
-  font-family: 'Montserrat', sans-serif;
+  font-size: 1.05rem;
   font-weight: 600;
-`;
-
-const ListActions = styled.div`
   display: flex;
+  align-items: center;
   gap: 0.75rem;
 `;
 
-const ListActionButton = styled.button`
+const ListCount = styled.span`
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.05);
+  padding: 0.2rem 0.6rem;
+  border-radius: 6px;
+`;
+
+const DeleteBtn = styled.button`
   background: none;
   border: none;
+  color: rgba(255,255,255,0.25);
   cursor: pointer;
-  font-size: 1.3rem;
-  padding: 0.5rem;
-  border-radius: 8px;
-  transition: all 0.3s ease;
+  padding: 0.4rem;
+  border-radius: 6px;
+  display: flex;
+  transition: all 0.15s;
 
   &:hover {
-    background: rgba(229, 62, 62, 0.1);
-    transform: scale(1.1);
+    color: #f87171;
+    background: rgba(239, 68, 68, 0.1);
   }
 `;
 
-const ListWatches = styled.div`
+const ListItems = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 1.5rem;
-  padding: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1rem;
+  padding: 1.25rem;
 `;
 
-const ListWatchItem = styled.div`
-  background: white;
+const ListItem = styled.div`
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 6px 15px rgba(0,0,0,0.1);
-  transition: all 0.3s ease-in-out;
   cursor: pointer;
   position: relative;
-  border: 1px solid rgba(102, 126, 234, 0.1);
+  transition: all 0.2s ease;
 
   &:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 15px 30px rgba(0,0,0,0.15);
-    border-color: rgba(102, 126, 234, 0.3);
+    transform: translateY(-2px);
+    border-color: rgba(255,255,255,0.12);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
   }
 `;
 
-const ListWatchImage = styled.img`
+const ListItemImg = styled.img`
   width: 100%;
-  height: 140px;
+  height: 130px;
   object-fit: cover;
+  display: block;
 `;
 
-const ListWatchInfo = styled.div`
-  padding: 1rem;
+const ListItemText = styled.div`
+  padding: 0.75rem 1rem;
 `;
 
-const ListWatchName = styled.h4`
+const ListItemName = styled.h4`
   margin: 0;
   color: #ffffff;
-  font-size: 1rem;
-  font-family: 'Montserrat', sans-serif;
+  font-size: 0.85rem;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 `;
 
-const ListWatchDetails = styled.div`
-  display: flex;
-  justify-content: space-between;
-  margin-top: 0.5rem;
-  align-items: center;
+const ListItemPrice = styled.span`
+  color: #4ade80;
+  font-weight: 600;
+  font-size: 0.8rem;
+  display: block;
+  margin-top: 0.25rem;
 `;
 
-const ListWatchPrice = styled.span`
-  color: #38a169;
-  font-weight: 700;
+const ListEmpty = styled.div`
+  padding: 2.5rem;
+  text-align: center;
+  color: rgba(255,255,255,0.2);
   font-size: 0.9rem;
-  font-family: 'Montserrat', sans-serif;
 `;
 
-const EmptyState = styled.div`
+/* ── Empty States ── */
+
+const EmptyBox = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  padding: 4rem 3rem;
+  padding: 3rem 2rem;
   text-align: center;
+  gap: 0.75rem;
 `;
 
-const EmptyIcon = styled.div`
-  font-size: 4rem;
-  margin-bottom: 1.5rem;
-`;
-
-const EmptyText = styled.p`
-  color: #718096;
-  font-size: 1.2rem;
-  margin-bottom: 2rem;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  line-height: 1.6;
-`;
-
-const BrowseButton = styled.button`
-  padding: 1rem 2rem;
-  background: linear-gradient(135deg, #667eea 0%, #ffffff 100%);
-  color: white;
-  border: none;
-  border-radius: 12px;
-  cursor: pointer;
-  font-size: 1rem;
-  font-weight: 500;
-  font-family: 'Montserrat', sans-serif;
-  transition: all 0.3s ease;
-  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 25px rgba(102, 126, 234, 0.4);
-  }
-`;
-
-const EmptyListState = styled.div`
-  padding: 3rem;
-  text-align: center;
-`;
-
-const EmptyListText = styled.p`
-  color: #718096;
-  font-size: 1.1rem;
+const EmptyTitle = styled.p`
   margin: 0;
-  font-family: 'Montserrat', sans-serif;
+  color: rgba(255,255,255,0.5);
+  font-size: 1.1rem;
+  font-weight: 600;
+`;
+
+const EmptyHint = styled.p`
+  margin: 0 0 0.75rem;
+  color: rgba(255,255,255,0.25);
+  font-size: 0.9rem;
+  max-width: 300px;
+  line-height: 1.5;
+`;
+
+/* ── Collection Tab ── */
+
+const CollectionStats = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 2rem;
+`;
+
+const CollectionMeta = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid rgba(255,255,255,0.06);
+`;
+
+const CollectionPaid = styled.span`
+  color: rgba(255,255,255,0.4);
+  font-size: 0.8rem;
   font-weight: 500;
-`; 
+`;
+
+const CollectionGain = styled.span<{ gained: boolean }>`
+  color: ${p => p.gained ? '#4ade80' : '#f87171'};
+  font-size: 0.8rem;
+  font-weight: 700;
+`;
+
+const CollectionDate = styled.span`
+  color: rgba(255,255,255,0.25);
+  font-size: 0.7rem;
+  margin-top: 0.3rem;
+`;

@@ -1,109 +1,73 @@
-/* Modern dark theme matching Home page */
 .about-page {
   min-height: 100vh;
-  background: radial-gradient(ellipse at top, #1a1a2e 0%, rgb(25, 33, 54) 25%, #0f0f23 50%, #0a0a0a 100%);
-  background-attachment: fixed;
-  position: relative;
-  overflow: hidden;
+  background: #0a0a0a;
 }
 
 .about-container {
   font-family: 'Inter', sans-serif;
   padding: 2rem;
-  position: relative;
-}
-
-.about-container::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 100vh;
-  background: radial-gradient(circle at top center, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.15) 30%, transparent 70%);
-  pointer-events: none;
-  z-index: 0;
-  opacity: 0;
-  animation: fadeInLight 1.5s ease-in-out forwards;
-}
-
-@keyframes fadeInLight {
-  0% { opacity: 0; }
-  100% { opacity: 1; }
-}
-
-/* Raise content above glow */
-.about-container .about-header,
-.about-container .about-content,
-.about-container .about-footer {
-  position: relative;
-  z-index: 1;
+  max-width: 640px;
+  margin: 0 auto;
 }
 
 .about-header {
   text-align: center;
-  margin-bottom: 2.5rem;
+  margin-bottom: 3rem;
+  margin-top: 2rem;
 }
 
 .about-header h1 {
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  font-size: clamp(4rem, 4vw, 3rem);
-  margin-top: 10;
-  margin-bottom: 20;
-  color: rgba(255, 255, 255);
-  background-clip: text;
+  font-family: 'Georgia', serif;
+  font-weight: 400;
+  font-size: 2rem;
+  color: #f5f5f0;
   letter-spacing: -0.02em;
-  line-height: 1.1;
+  line-height: 1.2;
 }
 
 .about-content {
-  max-width: 1000px;
-  margin: 0 auto;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  padding: 2rem;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #888;
+  font-size: 0.9rem;
+  line-height: 1.8;
 }
 
 .about-content h2 {
-  font-family: 'Inter', sans-serif;
-  font-weight: 600;
-  font-size: 1.5rem;
-  color: #333;
-  margin: 1.5rem 0 1rem;
+  font-family: 'Georgia', serif;
+  font-weight: 400;
+  font-size: 1.2rem;
+  color: #e8e8e3;
+  margin: 2.5rem 0 0.75rem;
+}
+
+.about-content h2:first-child {
+  margin-top: 0;
 }
 
 .about-content p {
-  font-size: 1.05rem;
-  line-height: 1.7;
+  font-size: 0.9rem;
+  line-height: 1.8;
   color: #555;
   margin: 0 0 1rem 0;
 }
 
 .about-content a {
-  color: #2196f3;
-  text-decoration: none;
+  color: #888;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .about-content a:hover {
-  text-decoration: underline;
+  color: #e8e8e3;
 }
 
-/* Footer styled to match glass aesthetic */
 .about-footer {
-  max-width: 1000px;
-  margin: 2rem auto 0;
+  max-width: 640px;
+  margin: 3rem auto 0;
   text-align: center;
-  padding: 1rem 1.25rem;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  color: #212529;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  box-shadow: 0 12px 30px rgba(0,0,0,0.12);
+  padding: 1.5rem;
+  border-top: 1px solid #141414;
+  color: #333;
+  font-size: 0.75rem;
 }
 
 .about-footer p {

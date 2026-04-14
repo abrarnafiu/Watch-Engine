@@ -3,28 +3,6 @@ import { supabase } from './supabaseClient';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const ANONYMOUS_SEARCH_LIMIT = 3;
 
-// Utility function to call the analyze-query API endpoint
-async function analyzeQuery(query: string, schema: any) {
-  try {
-    const response = await fetch(`${API_URL}/api/analyze-query`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ query, schema }),
-    });
-    
-    if (!response.ok) {
-      throw new Error(`API call failed: ${response.statusText}`);
-    }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Error calling analyze-query API:', error);
-    throw error;
-  }
-}
-
 export interface SearchResult {
   id: string;
   model_name: string;
@@ -37,14 +15,13 @@ export interface SearchResult {
   image_url: string;
   description: string;
   dial_color: string;
-  similarity_score?: number;
+  similarity?: number;
 }
 
 export async function searchWatches(query: string): Promise<SearchResult[]> {
   try {
     // Get the current user
     const { data: { user }, error: userError } = await supabase.auth.getUser();
-    
     if (userError) throw userError;
 
     const today = new Date().toISOString().split('T')[0];
@@ -54,11 +31,11 @@ export async function searchWatches(query: string): Promise<SearchResult[]> {
       const { data: searchData, error: searchError } = await supabase
         .from('anonymous_searches')
         .select('search_count')
-        .eq('ip_address', window.location.hostname) // Using hostname as a simple identifier
+        .eq('ip_address', window.location.hostname)
         .eq('search_date', today)
         .single();
 
-      if (searchError && searchError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+      if (searchError && searchError.code !== 'PGRST116') {
         throw searchError;
       }
 
@@ -68,7 +45,6 @@ export async function searchWatches(query: string): Promise<SearchResult[]> {
         throw new Error(`You have reached your daily search limit of ${ANONYMOUS_SEARCH_LIMIT} searches. Please sign up or log in to continue searching.`);
       }
 
-      // Update or insert the search count
       const { error: upsertError } = await supabase
         .from('anonymous_searches')
         .upsert({
@@ -93,14 +69,13 @@ export async function searchWatches(query: string): Promise<SearchResult[]> {
         throw searchError;
       }
 
-      const DAILY_SEARCH_LIMIT = 10; // Higher limit for authenticated users
+      const DAILY_SEARCH_LIMIT = 10;
       const currentCount = searchData?.search_count || 0;
 
       if (currentCount >= DAILY_SEARCH_LIMIT) {
         throw new Error(`You have reached your daily search limit of ${DAILY_SEARCH_LIMIT} searches. Please try again tomorrow.`);
       }
 
-      // Update or insert the search count
       const { error: upsertError } = await supabase
         .from('user_searches')
         .upsert({
@@ -114,75 +89,21 @@ export async function searchWatches(query: string): Promise<SearchResult[]> {
       if (upsertError) throw upsertError;
     }
 
-    // Get schema for OpenAI analysis
-    const { data: schemaData, error: schemaError } = await supabase
-      .from('watches')
-      .select('*')
-      .limit(1);
-
-    if (schemaError) throw schemaError;
-
-    // Analyze query to extract searchable categories
-    const searchCriteria = await analyzeQuery(query, schemaData[0]);
-
-    // Build the base query
-    let supabaseQuery = supabase.from('watches').select('*');
-
-    // Apply category-based filters
-    if (searchCriteria.model_name) {
-      supabaseQuery = supabaseQuery.ilike('model_name', `%${searchCriteria.model_name}%`);
-    }
-    if (searchCriteria.family_name) {
-      supabaseQuery = supabaseQuery.ilike('family_name', `%${searchCriteria.family_name}%`);
-    }
-    if (searchCriteria.year_produced) {
-      supabaseQuery = supabaseQuery.eq('year_produced', searchCriteria.year_produced);
-    }
-    if (searchCriteria.movement_name) {
-      supabaseQuery = supabaseQuery.ilike('movement_name', `%${searchCriteria.movement_name}%`);
-    }
-    if (searchCriteria.function_name) {
-      supabaseQuery = supabaseQuery.ilike('function_name', `%${searchCriteria.function_name}%`);
-    }
-    if (searchCriteria.limited_edition !== undefined) {
-      supabaseQuery = supabaseQuery.eq('limited_edition', searchCriteria.limited_edition);
-    }
-    if (searchCriteria.price_eur_min) {
-      supabaseQuery = supabaseQuery.gte('price_eur', searchCriteria.price_eur_min);
-    }
-    if (searchCriteria.price_eur_max) {
-      supabaseQuery = supabaseQuery.lte('price_eur', searchCriteria.price_eur_max);
-    }
-    if (searchCriteria.description) {
-      supabaseQuery = supabaseQuery.ilike('description', `%${searchCriteria.description}%`);
-    }
-    if (searchCriteria.dial_color) {
-      supabaseQuery = supabaseQuery.ilike('dial_color', `%${searchCriteria.dial_color}%`);
-    }
-    if (searchCriteria.brand_id) {
-      supabaseQuery = supabaseQuery.eq('brand_id', searchCriteria.brand_id);
-    }
-
-    // Execute the query
-    const { data: categoryResults, error: categoryError } = await supabaseQuery;
-    if (categoryError) throw categoryError;
-
-    // If we have category matches, return them
-    if (categoryResults && categoryResults.length > 0) {
-      return categoryResults;
-    }
-
-    // If no category matches, fall back to vector similarity search
-    const { data: vectorResults, error: vectorError } = await supabase.rpc('search_watches_by_similarity', {
-      query_text: query,
-      similarity_threshold: 0.7
+    // Call the hybrid search endpoint (handles both vector + filter search)
+    const response = await fetch(`${API_URL}/api/hybrid-search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
     });
 
-    if (vectorError) throw vectorError;
+    if (!response.ok) {
+      throw new Error(`Search failed: ${response.statusText}`);
+    }
 
-    return vectorResults || [];
+    const result = await response.json();
+    return result.data || [];
   } catch (error) {
     console.error('Error in searchWatches:', error);
     throw error;
   }
-} 
+}

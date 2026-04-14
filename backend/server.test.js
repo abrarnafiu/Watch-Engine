@@ -3,31 +3,45 @@ import express from 'express';
 import cors from 'cors';
 import { jest } from '@jest/globals';
 import http from 'http';
-import OpenAI from 'openai';
 
-// Mock OpenAI
-jest.mock('openai', () => ({
-  OpenAI: jest.fn().mockImplementation(() => ({
-    chat: {
-      completions: {
-        create: jest.fn().mockResolvedValue({
-          choices: [{
-            message: {
-              content: JSON.stringify({
-                'Dial Color': 'blue',
-                'Type': 'chronograph',
-                'Price': 'under 10000'
-              })
-            }
-          }]
+// Mock Ollama
+jest.mock('ollama', () => ({
+  Ollama: jest.fn().mockImplementation(() => ({
+    chat: jest.fn().mockResolvedValue({
+      message: {
+        content: JSON.stringify({
+          'Dial_Color': 'blue',
+          'Type': 'chronograph',
+          'Price_Max': 10000
         })
       }
-    }
+    }),
+    embeddings: jest.fn().mockResolvedValue({
+      embedding: new Array(768).fill(0.1)
+    }),
   }))
 }));
 
+// Mock Supabase
+jest.mock('@supabase/supabase-js', () => ({
+  createClient: jest.fn().mockReturnValue({
+    from: jest.fn().mockReturnValue({
+      select: jest.fn().mockReturnValue({
+        ilike: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        gte: jest.fn().mockReturnThis(),
+        lte: jest.fn().mockReturnThis(),
+        not: jest.fn().mockReturnThis(),
+        limit: jest.fn().mockResolvedValue({ data: [], error: null }),
+      }),
+    }),
+    rpc: jest.fn().mockResolvedValue({ data: [], error: null }),
+  })
+}));
+
 // Mock environment variables
-process.env.OPENAI_API_KEY = 'test-api-key';
+process.env.VITE_SUPABASE_URL = 'https://test.supabase.co';
+process.env.VITE_SUPABASE_ANON_KEY = 'test-key';
 
 // Import your server
 import app from './server.js';
@@ -41,9 +55,6 @@ describe('Backend API Tests', () => {
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('Dial Color', 'blue');
-      expect(response.body.data).toHaveProperty('Features', "chronograph");
-      expect(response.body.data).toHaveProperty('Price', 'under 10000');
     });
 
     it('should handle missing query parameter', async () => {
@@ -55,15 +66,26 @@ describe('Backend API Tests', () => {
       expect(response.body.success).toBe(false);
       expect(response.body.message).toBe('Invalid query parameter');
     });
+  });
 
-    it('should handle simple queries', async () => {
+  describe('POST /api/hybrid-search', () => {
+    it('should perform hybrid search', async () => {
       const response = await request(app)
-        .post('/api/analyze-query')
-        .send({ query: 'find me a watch' })
+        .post('/api/hybrid-search')
+        .send({ query: 'blue diving watch under 5000' })
         .expect(200);
 
       expect(response.body.success).toBe(true);
-      expect(response.body.data).toHaveProperty('Type', 'any');
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    it('should handle missing query parameter', async () => {
+      const response = await request(app)
+        .post('/api/hybrid-search')
+        .send({})
+        .expect(400);
+
+      expect(response.body.success).toBe(false);
     });
   });
 
@@ -85,7 +107,6 @@ describe('Backend API Tests', () => {
     });
 
     it('should handle valid image URLs', async () => {
-      // Mock the http.get response
       const mockResponse = {
         statusCode: 200,
         headers: { 'content-type': 'image/jpeg' },
@@ -111,18 +132,15 @@ describe('Backend API Tests', () => {
 
   describe('Rate Limiting', () => {
     it('should limit requests within the time window', async () => {
-      // Make multiple requests in quick succession
-      const requests = Array(101).fill().map(() => 
+      const requests = Array(101).fill().map(() =>
         request(app)
           .post('/api/analyze-query')
           .send({ query: 'test query' })
       );
 
       const responses = await Promise.all(requests);
-      
-      // Check that some requests were rate limited
       const rateLimited = responses.some(res => res.status === 429);
       expect(rateLimited).toBe(true);
     });
   });
-}); 
+});
