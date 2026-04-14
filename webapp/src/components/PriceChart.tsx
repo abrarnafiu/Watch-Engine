@@ -88,7 +88,7 @@ export default function PriceChart({ watchId }: { watchId: string }) {
                 color: '#fff',
                 fontSize: '0.85rem',
               }}
-              formatter={(value: number, name: string) => [`$${value.toLocaleString()}`, name]}
+              formatter={(value: number | undefined, name: string) => [`$${(value ?? 0).toLocaleString()}`, name]}
             />
             {sources.map(source => (
               <Line
