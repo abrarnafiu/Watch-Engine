@@ -8,9 +8,13 @@ import { API_URL } from '../config';
  */
 export const getImageUrl = (imageUrl: string | null | undefined, fallback: string = "/placeholder.jpg"): string => {
   if (!imageUrl) return fallback;
-  
-  // Use the proxy endpoint to avoid SSL certificate issues
-  return `${API_URL}/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+
+  // Only the Watch Database API host has SSL certificate issues and needs the proxy;
+  // other sources (e.g. Jomashop CDN) serve valid HTTPS and load directly
+  if (imageUrl.includes('makingdatameaningful.com')) {
+    return `${API_URL}/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+  }
+  return imageUrl;
 };
 
 /**
