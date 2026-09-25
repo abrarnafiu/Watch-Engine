@@ -194,10 +194,22 @@ async function scrapeDetailPage(page, url) {
   }
 }
 
+// Drop rows sharing a source_id within one batch — Postgres rejects an upsert that touches the same row twice
+function dedupeBySourceId(rows) {
+  const seen = new Set();
+  return rows.filter(r => {
+    if (!r.source_id) return true;
+    if (seen.has(r.source_id)) return false;
+    seen.add(r.source_id);
+    return true;
+  });
+}
+
 function transformToSchema(listing, detail, brand) {
   const modelName = detail.name || detail.model || listing.title || '';
   const priceUsd = parsePrice(detail.price || listing.price);
   return {
+    source_id: listing.href || null,
     reference: detail.reference || null,
     brand_id: null,
     model_name: modelName,
@@ -286,10 +298,10 @@ async function scrapeBrand(browser, listingPage, brand) {
     }
 
     // Process detail pages in parallel
-    const batch = await processListingsChunk(browser, listings, brand, brandId);
+    const batch = dedupeBySourceId(await processListingsChunk(browser, listings, brand, brandId));
 
     if (batch.length > 0) {
-      const { error } = await supabase.from('watches').upsert(batch);
+      const { error } = await supabase.from('watches').upsert(batch, { onConflict: 'source,source_id' });
       if (error) {
         console.error(`[${brand}] Upsert error:`, error);
       } else {

@@ -246,6 +246,7 @@ function transformToSchema(listing, detail, brand) {
   const modelName = detail.name || detail.model || listing.title || '';
 
   return {
+    source_id: listing.href || null,
     reference: detail.reference || null,
     brand_id: null,
     model_name: modelName,
@@ -352,7 +353,7 @@ async function main() {
     }
 
     if (batch.length > 0) {
-      const { error } = await supabase.from('watches').upsert(batch);
+      const { error } = await supabase.from('watches').upsert(batch, { onConflict: 'source,source_id' });
       if (error) {
         console.error('Upsert error:', error);
       } else {

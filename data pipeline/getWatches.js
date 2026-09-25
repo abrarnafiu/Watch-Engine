@@ -89,6 +89,7 @@ async function fetchAndInsertAllPages() {
 
         // Build the row first so we can use all fields for embedding
         const row = {
+          source_id: w.watchId != null ? String(w.watchId) : null,
           reference: w.reference || null,
           brand_id: MAKE_ID,
           model_name: w.modelName,
@@ -121,7 +122,7 @@ async function fetchAndInsertAllPages() {
       } else {
         const { error } = await supabase
           .from(TABLE_NAME)
-          .upsert(insertBatch);
+          .upsert(insertBatch, { onConflict: 'source,source_id' });
 
         if (error) {
           console.error(`Insert error on page ${page}:`, error);

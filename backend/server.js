@@ -253,34 +253,41 @@ async function runFilteredSearch(filters) {
   return data || [];
 }
 
+// Scrapers used to insert the same listing multiple times under different ids,
+// so fuse on listing content rather than row id to collapse those copies
+function watchKey(watch) {
+  if (!watch.source || !watch.model_name) return watch.id;
+  return [watch.source, watch.model_name, watch.reference, watch.image_url].join('|');
+}
+
 // --- Reciprocal Rank Fusion ---
 // Combines multiple ranked lists into a single ranking.
 // Each result's score = sum of 1/(k + rank) across all lists it appears in.
 // k=60 is the standard constant (from the original RRF paper).
 
 function reciprocalRankFusion(rankedLists, k = 60) {
-  const scores = new Map();    // id -> cumulative RRF score
-  const watchData = new Map(); // id -> watch object
+  const scores = new Map();    // key -> cumulative RRF score
+  const watchData = new Map(); // key -> watch object
 
   for (const list of rankedLists) {
     for (let rank = 0; rank < list.length; rank++) {
       const watch = list[rank];
-      const id = watch.id;
+      const key = watchKey(watch);
 
-      if (!watchData.has(id)) {
-        watchData.set(id, watch);
+      if (!watchData.has(key)) {
+        watchData.set(key, watch);
       }
 
-      const currentScore = scores.get(id) || 0;
-      scores.set(id, currentScore + 1 / (k + rank + 1));
+      const currentScore = scores.get(key) || 0;
+      scores.set(key, currentScore + 1 / (k + rank + 1));
     }
   }
 
   // Sort by RRF score descending
   const fused = [...scores.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([id, score]) => ({
-      ...watchData.get(id),
+    .map(([key, score]) => ({
+      ...watchData.get(key),
       rrf_score: Math.round(score * 10000) / 10000,
     }));
 
