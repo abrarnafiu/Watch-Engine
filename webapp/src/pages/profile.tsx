@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import Navbar from '../components/navbar';
-import styled from 'styled-components';
+import Footer from '../components/footer';
+import styled, { keyframes } from 'styled-components';
 import type { WatchPreferences } from '../types/supabase';
 import { getImageUrl } from '../lib/imageUtils';
 
@@ -34,14 +35,43 @@ interface WatchList {
   items: Watch[];
 }
 
+interface CollectionItem {
+  id: string;
+  watch_id: string;
+  purchase_price: number | null;
+  purchase_date: string | null;
+  notes: string | null;
+  watch: Watch;
+}
+
+type Tab = 'preferences' | 'favorites' | 'lists' | 'collection';
+type ChipPrefKey = 'preferred_styles' | 'preferred_materials' | 'preferred_complications' | 'dial_colors';
+
+const CHIP_GROUPS: { key: ChipPrefKey; label: string; options: string[] }[] = [
+  { key: 'preferred_styles', label: 'Styles', options: ['Dress', 'Sport', 'Dive', 'Pilot', 'Field', 'Racing', 'Smart'] },
+  { key: 'preferred_materials', label: 'Materials', options: ['Stainless Steel', 'Gold', 'Titanium', 'Ceramic', 'Carbon Fiber', 'Bronze'] },
+  { key: 'preferred_complications', label: 'Complications', options: ['Chronograph', 'GMT', 'Perpetual Calendar', 'Moon Phase', 'Tourbillon'] },
+  { key: 'dial_colors', label: 'Dial colors', options: ['Black', 'White', 'Blue', 'Green', 'Silver', 'Gold', 'Brown'] },
+];
+
+const formatPrice = (n: number) => `$${Math.round(n).toLocaleString()}`;
+
+const initials = (name: string) =>
+  name.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase() ?? '').join('') || '?';
+
 export default function Profile() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditingPreferences, setIsEditingPreferences] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [preferences, setPreferences] = useState<WatchPreferences>({
     user_id: '',
@@ -58,15 +88,12 @@ export default function Profile() {
     name: '',
     profile_image: null,
   });
+  // Snapshot taken when editing starts, so Cancel can discard unsaved changes
+  const [preferencesBeforeEdit, setPreferencesBeforeEdit] = useState<WatchPreferences | null>(null);
   const [favorites, setFavorites] = useState<Watch[]>([]);
   const [lists, setLists] = useState<WatchList[]>([]);
-  const [collection, setCollection] = useState<Array<{ id: string; watch_id: string; purchase_price: number | null; purchase_date: string | null; notes: string | null; watch: Watch }>>([]);
-  const [activeTab, setActiveTab] = useState<'preferences' | 'favorites' | 'lists' | 'collection'>('preferences');
-
-  const watchStyles = ['Dress', 'Sport', 'Dive', 'Pilot', 'Field', 'Racing', 'Smart'];
-  const materials = ['Stainless Steel', 'Gold', 'Titanium', 'Ceramic', 'Carbon Fiber', 'Bronze'];
-  const complications = ['Chronograph', 'GMT', 'Perpetual Calendar', 'Moon Phase', 'Tourbillon'];
-  const colors = ['Black', 'White', 'Blue', 'Green', 'Silver', 'Gold', 'Brown'];
+  const [collection, setCollection] = useState<CollectionItem[]>([]);
+  const [activeTab, setActiveTab] = useState<Tab>('preferences');
 
   useEffect(() => {
     fetchProfile();
@@ -213,7 +240,8 @@ export default function Profile() {
 
   async function updateProfile() {
     try {
-      setLoading(true);
+      setSaving(true);
+      setError(null);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user logged in');
 
@@ -226,12 +254,15 @@ export default function Profile() {
         });
 
       if (error) throw error;
-      alert('Profile updated successfully!');
+      setIsEditingPreferences(false);
+      setPreferencesBeforeEdit(null);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
     } catch (error) {
       console.error('Error updating profile:', error);
       setError(error instanceof Error ? error.message : 'An error occurred');
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   }
 
@@ -246,9 +277,36 @@ export default function Profile() {
     }
   }
 
+  const startEditing = () => {
+    setPreferencesBeforeEdit(preferences);
+    setIsEditingPreferences(true);
+    setActiveTab('preferences');
+  };
+
+  const cancelEditing = () => {
+    if (preferencesBeforeEdit) setPreferences(preferencesBeforeEdit);
+    setPreferencesBeforeEdit(null);
+    setIsEditingPreferences(false);
+  };
+
+  const toggleChip = (key: ChipPrefKey, value: string) => {
+    setPreferences(prev => ({
+      ...prev,
+      [key]: prev[key].includes(value) ? prev[key].filter(v => v !== value) : [...prev[key], value],
+    }));
+  };
+
+  const closeUploadModal = () => {
+    setIsEditingProfile(false);
+    setSelectedImage(null);
+    setPreviewUrl(null);
+    setUploadError(null);
+  };
+
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setUploadError(null);
       setSelectedImage(file);
       const reader = new FileReader();
       reader.onloadend = () => { setPreviewUrl(reader.result as string); };
@@ -259,7 +317,8 @@ export default function Profile() {
   const handleImageUpload = async () => {
     if (!selectedImage) return;
     try {
-      setLoading(true);
+      setUploading(true);
+      setUploadError(null);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user logged in');
 
@@ -267,14 +326,15 @@ export default function Profile() {
       if (!selectedImage.type.startsWith('image/')) throw new Error('Please upload an image file');
 
       const fileExt = selectedImage.name.split('.').pop();
-      let uploadedFileName = `${user.id}-${Date.now()}.${fileExt}`;
+      // One folder per user so storage policies can restrict writes to the owner
+      let uploadedFileName = `${user.id}/${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage
         .from('profile-pictures')
         .upload(uploadedFileName, selectedImage, { cacheControl: '3600', upsert: true });
 
       if (uploadError) {
         if (uploadError.message.includes('duplicate')) {
-          uploadedFileName = `${user.id}-${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+          uploadedFileName = `${user.id}/${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
           const { error: retryError } = await supabase.storage
             .from('profile-pictures')
             .upload(uploadedFileName, selectedImage, { cacheControl: '3600', upsert: true });
@@ -293,14 +353,16 @@ export default function Profile() {
       if (updateError) throw updateError;
 
       setPreferences(prev => ({ ...prev, profile_image: publicUrl }));
-      setIsEditingProfile(false);
-      setSelectedImage(null);
-      setPreviewUrl(null);
+      setAvatarFailed(false);
+      closeUploadModal();
     } catch (error) {
       console.error('Error uploading image:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      const message = error instanceof Error ? error.message : 'An error occurred';
+      setUploadError(/bucket not found/i.test(message)
+        ? 'Photo storage is not set up yet (the profile-pictures bucket is missing).'
+        : message);
     } finally {
-      setLoading(false);
+      setUploading(false);
     }
   };
 
@@ -331,1248 +393,1235 @@ export default function Profile() {
     }
   };
 
-  const handleDeleteList = async (listId: string) => {
+  const handleDeleteList = async (list: WatchList) => {
+    if (!window.confirm(`Delete "${list.name}"? This can't be undone.`)) return;
     try {
-      const { error } = await supabase.from('watch_lists').delete().eq('id', listId);
+      const { error } = await supabase.from('watch_lists').delete().eq('id', list.id);
       if (error) throw error;
-      setLists(prev => prev.filter(list => list.id !== listId));
+      setLists(prev => prev.filter(l => l.id !== list.id));
     } catch (error) {
       console.error('Error deleting list:', error);
     }
   };
 
-  if (loading) return <Loading>Loading...</Loading>;
+  const marketValue = collection.reduce((sum, item) => sum + (item.watch.price_eur || 0), 0);
+  const totalPaid = collection.reduce((sum, item) => sum + (item.purchase_price || 0), 0);
+  // Only compare watches where both prices are known
+  const priced = collection.filter(item => item.purchase_price && item.watch.price_eur);
+  const valueChange = priced.reduce((sum, item) => sum + (item.watch.price_eur! - item.purchase_price!), 0);
+
+  const tabs: { id: Tab; label: string; count?: number }[] = [
+    { id: 'preferences', label: 'Preferences' },
+    { id: 'favorites', label: 'Favorites', count: favorites.length },
+    { id: 'lists', label: 'Lists', count: lists.length },
+    { id: 'collection', label: 'Collection', count: collection.length },
+  ];
+
+  if (loading) {
+    return (
+      <Page>
+        <Navbar />
+        <LoadWrap><Dot /><Dot /><Dot /></LoadWrap>
+      </Page>
+    );
+  }
+
+  const removeIcon = (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  );
+
+  const emptyState = (title: string, hint: string) => (
+    <Empty>
+      <EmptyTitle>{title}</EmptyTitle>
+      <EmptyHint>{hint}</EmptyHint>
+      <PrimaryBtn onClick={() => navigate('/')}>Search watches</PrimaryBtn>
+    </Empty>
+  );
 
   return (
-    <Container>
+    <Page>
       <Navbar />
       <Content>
-        {/* ── Profile Header ── */}
-        <ProfileHeader>
-          <ProfileTopRow>
-            <ProfileLeft>
-              <ProfilePicture>
-                <ProfileImage
-                  src={preferences.profile_image || '/profile-placeholder.png'}
-                  alt={preferences.name || 'Profile'}
-                />
-                <EditPicBtn onClick={() => setIsEditingProfile(true)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-                    <circle cx="12" cy="13" r="4"/>
-                  </svg>
-                </EditPicBtn>
-              </ProfilePicture>
-              <ProfileText>
-                <Name>{preferences.name || 'Add your name'}</Name>
-                <Bio>{preferences.bio || 'No bio added yet'}</Bio>
-              </ProfileText>
-            </ProfileLeft>
-            <LogoutButton onClick={handleLogout}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
-              </svg>
-              Sign Out
-            </LogoutButton>
-          </ProfileTopRow>
-          <StatsRow>
-            <StatCard>
-              <StatNum>{favorites.length}</StatNum>
-              <StatLbl>Favorites</StatLbl>
-            </StatCard>
-            <StatCard>
-              <StatNum>{lists.length}</StatNum>
-              <StatLbl>Lists</StatLbl>
-            </StatCard>
-            <StatCard>
-              <StatNum>{lists.reduce((acc, list) => acc + (list.items?.length || 0), 0)}</StatNum>
-              <StatLbl>Saved</StatLbl>
-            </StatCard>
-            <StatCard>
-              <StatNum>{preferences.preferred_styles.length}</StatNum>
-              <StatLbl>Styles</StatLbl>
-            </StatCard>
-          </StatsRow>
-        </ProfileHeader>
-
-        {/* ── Upload Modal ── */}
-        {isEditingProfile && (
-          <ModalOverlay onClick={() => setIsEditingProfile(false)}>
-            <Modal onClick={e => e.stopPropagation()}>
-              <ModalHead>
-                <ModalTitle>Change Profile Picture</ModalTitle>
-                <CloseBtn onClick={() => setIsEditingProfile(false)}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                  </svg>
-                </CloseBtn>
-              </ModalHead>
-              <ModalBody>
-                {previewUrl ? (
-                  <ImgPreview src={previewUrl} alt="Preview" />
-                ) : (
-                  <UploadZone onClick={() => fileInputRef.current?.click()}>
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
-                    </svg>
-                    <UploadLabel>Click to choose a photo</UploadLabel>
-                    <UploadHint>JPG, PNG up to 5MB</UploadHint>
-                  </UploadZone>
-                )}
-                <HiddenInput type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" />
-                {previewUrl && (
-                  <BtnRow>
-                    <PrimaryBtn onClick={handleImageUpload} disabled={loading}>
-                      {loading ? 'Uploading...' : 'Upload'}
-                    </PrimaryBtn>
-                    <SecondaryBtn onClick={() => { setSelectedImage(null); setPreviewUrl(null); }}>
-                      Cancel
-                    </SecondaryBtn>
-                  </BtnRow>
-                )}
-              </ModalBody>
-            </Modal>
-          </ModalOverlay>
-        )}
+        {/* ── Header ── */}
+        <Header>
+          <Identity>
+            <AvatarBtn onClick={() => setIsEditingProfile(true)} aria-label="Change profile picture">
+              {preferences.profile_image && !avatarFailed ? (
+                <AvatarImg src={preferences.profile_image} alt="" onError={() => setAvatarFailed(true)} />
+              ) : (
+                <AvatarInitials>{initials(preferences.name || '')}</AvatarInitials>
+              )}
+              <AvatarHover>Change</AvatarHover>
+            </AvatarBtn>
+            <IdentityText>
+              <Name $placeholder={!preferences.name}>{preferences.name || 'Your name'}</Name>
+              {preferences.bio
+                ? <Bio>{preferences.bio}</Bio>
+                : <Bio as="button" onClick={startEditing} $link>Add a short bio</Bio>}
+              <Meta>
+                {favorites.length} favorites<Sep>·</Sep>
+                {lists.length} lists<Sep>·</Sep>
+                {collection.length} owned
+              </Meta>
+            </IdentityText>
+          </Identity>
+          <HeaderActions>
+            <SecondaryBtn onClick={startEditing}>Edit profile</SecondaryBtn>
+            <TextBtn onClick={handleLogout}>Sign out</TextBtn>
+          </HeaderActions>
+        </Header>
 
         {error && <ErrorMsg>{error}</ErrorMsg>}
 
         {/* ── Tabs ── */}
-        <TabBar>
-          <TabBtn active={activeTab === 'preferences'} onClick={() => setActiveTab('preferences')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-            </svg>
-            Preferences
-          </TabBtn>
-          <TabBtn active={activeTab === 'favorites'} onClick={() => setActiveTab('favorites')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill={activeTab === 'favorites' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
-            Favorites ({favorites.length})
-          </TabBtn>
-          <TabBtn active={activeTab === 'lists'} onClick={() => setActiveTab('lists')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-            </svg>
-            Lists ({lists.length})
-          </TabBtn>
-          <TabBtn active={activeTab === 'collection'} onClick={() => setActiveTab('collection')}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-            </svg>
-            Collection ({collection.length})
-          </TabBtn>
+        <TabBar role="tablist">
+          {tabs.map(tab => (
+            <TabBtn
+              key={tab.id}
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              $active={activeTab === tab.id}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.label}
+              {tab.count !== undefined && <TabCount>{tab.count}</TabCount>}
+            </TabBtn>
+          ))}
         </TabBar>
 
-        {/* ── Preferences Tab ── */}
+        {/* ── Preferences ── */}
         {activeTab === 'preferences' && (
-          <GlassCard>
-            <CardHeader>
-              <CardTitle>Watch Preferences</CardTitle>
-              {!isEditingPreferences && (
-                <EditBtn onClick={() => setIsEditingPreferences(true)}>Edit</EditBtn>
-              )}
-            </CardHeader>
+          isEditingPreferences ? (
+            <Form onSubmit={e => { e.preventDefault(); updateProfile(); }}>
+              <Field>
+                <FieldLabel htmlFor="profile-name">Name</FieldLabel>
+                <TextInput
+                  id="profile-name"
+                  value={preferences.name || ''}
+                  onChange={e => setPreferences(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Your name"
+                />
+              </Field>
 
-            {isEditingPreferences ? (
-              <>
-                <FormSection>
-                  <FormLabel>Price Range (USD)</FormLabel>
-                  <PriceRow>
-                    <PriceField
+              <Field>
+                <FieldLabel htmlFor="profile-bio">Bio</FieldLabel>
+                <TextArea
+                  id="profile-bio"
+                  rows={2}
+                  value={preferences.bio || ''}
+                  onChange={e => setPreferences(prev => ({ ...prev, bio: e.target.value }))}
+                  placeholder="What are you collecting or hunting for?"
+                />
+              </Field>
+
+              <Field>
+                <FieldLabel>Price range</FieldLabel>
+                <PriceRow>
+                  <PriceInputWrap>
+                    <span>$</span>
+                    <TextInput
                       type="number"
+                      min={0}
+                      aria-label="Minimum price"
                       value={preferences.price_range_min}
-                      onChange={(e) => setPreferences(prev => ({ ...prev, price_range_min: parseInt(e.target.value) }))}
-                      placeholder="Min"
+                      onChange={e => setPreferences(prev => ({ ...prev, price_range_min: Number(e.target.value) || 0 }))}
                     />
-                    <PriceDivider>to</PriceDivider>
-                    <PriceField
+                  </PriceInputWrap>
+                  <PriceDivider>to</PriceDivider>
+                  <PriceInputWrap>
+                    <span>$</span>
+                    <TextInput
                       type="number"
+                      min={0}
+                      aria-label="Maximum price"
                       value={preferences.price_range_max}
-                      onChange={(e) => setPreferences(prev => ({ ...prev, price_range_max: parseInt(e.target.value) }))}
-                      placeholder="Max"
+                      onChange={e => setPreferences(prev => ({ ...prev, price_range_max: Number(e.target.value) || 0 }))}
                     />
-                  </PriceRow>
-                </FormSection>
+                  </PriceInputWrap>
+                </PriceRow>
+              </Field>
 
-                <FormSection>
-                  <FormLabel>Watch Styles</FormLabel>
+              {CHIP_GROUPS.map(group => (
+                <Field key={group.key}>
+                  <FieldLabel>{group.label}</FieldLabel>
                   <ChipGrid>
-                    {watchStyles.map(style => (
-                      <Chip
-                        key={style}
-                        selected={preferences.preferred_styles.includes(style)}
-                        onClick={() => setPreferences(prev => ({
-                          ...prev,
-                          preferred_styles: prev.preferred_styles.includes(style)
-                            ? prev.preferred_styles.filter(s => s !== style)
-                            : [...prev.preferred_styles, style]
-                        }))}
-                      >{style}</Chip>
-                    ))}
+                    {group.options.map(option => {
+                      const selected = preferences[group.key].includes(option);
+                      return (
+                        <Chip
+                          key={option}
+                          type="button"
+                          aria-pressed={selected}
+                          $selected={selected}
+                          onClick={() => toggleChip(group.key, option)}
+                        >{option}</Chip>
+                      );
+                    })}
                   </ChipGrid>
-                </FormSection>
+                </Field>
+              ))}
 
-                <FormSection>
-                  <FormLabel>Materials</FormLabel>
-                  <ChipGrid>
-                    {materials.map(material => (
-                      <Chip
-                        key={material}
-                        selected={preferences.preferred_materials.includes(material)}
-                        onClick={() => setPreferences(prev => ({
-                          ...prev,
-                          preferred_materials: prev.preferred_materials.includes(material)
-                            ? prev.preferred_materials.filter(m => m !== material)
-                            : [...prev.preferred_materials, material]
-                        }))}
-                      >{material}</Chip>
-                    ))}
-                  </ChipGrid>
-                </FormSection>
-
-                <FormSection>
-                  <FormLabel>Complications</FormLabel>
-                  <ChipGrid>
-                    {complications.map(comp => (
-                      <Chip
-                        key={comp}
-                        selected={preferences.preferred_complications.includes(comp)}
-                        onClick={() => setPreferences(prev => ({
-                          ...prev,
-                          preferred_complications: prev.preferred_complications.includes(comp)
-                            ? prev.preferred_complications.filter(c => c !== comp)
-                            : [...prev.preferred_complications, comp]
-                        }))}
-                      >{comp}</Chip>
-                    ))}
-                  </ChipGrid>
-                </FormSection>
-
-                <FormSection>
-                  <FormLabel>Dial Colors</FormLabel>
-                  <ChipGrid>
-                    {colors.map(color => (
-                      <Chip
-                        key={color}
-                        selected={preferences.dial_colors.includes(color)}
-                        onClick={() => setPreferences(prev => ({
-                          ...prev,
-                          dial_colors: prev.dial_colors.includes(color)
-                            ? prev.dial_colors.filter(c => c !== color)
-                            : [...prev.dial_colors, color]
-                        }))}
-                      >{color}</Chip>
-                    ))}
-                  </ChipGrid>
-                </FormSection>
-
-                <BtnRow>
-                  <PrimaryBtn onClick={() => { updateProfile(); setIsEditingPreferences(false); }} disabled={loading}>
-                    {loading ? 'Saving...' : 'Save Preferences'}
-                  </PrimaryBtn>
-                  <SecondaryBtn onClick={() => setIsEditingPreferences(false)}>Cancel</SecondaryBtn>
-                </BtnRow>
-              </>
-            ) : (
-              <PrefsGrid>
-                <PrefCard>
-                  <PrefLabel>Price Range</PrefLabel>
-                  <PrefValue>${preferences.price_range_min.toLocaleString()} &mdash; ${preferences.price_range_max.toLocaleString()}</PrefValue>
-                </PrefCard>
-                <PrefCard>
-                  <PrefLabel>Styles</PrefLabel>
-                  <TagList>
-                    {preferences.preferred_styles.length > 0
-                      ? preferences.preferred_styles.map(s => <Tag key={s}>{s}</Tag>)
-                      : <PrefMuted>None selected</PrefMuted>}
-                  </TagList>
-                </PrefCard>
-                <PrefCard>
-                  <PrefLabel>Materials</PrefLabel>
-                  <TagList>
-                    {preferences.preferred_materials.length > 0
-                      ? preferences.preferred_materials.map(m => <Tag key={m}>{m}</Tag>)
-                      : <PrefMuted>None selected</PrefMuted>}
-                  </TagList>
-                </PrefCard>
-                <PrefCard>
-                  <PrefLabel>Complications</PrefLabel>
-                  <TagList>
-                    {preferences.preferred_complications.length > 0
-                      ? preferences.preferred_complications.map(c => <Tag key={c}>{c}</Tag>)
-                      : <PrefMuted>None selected</PrefMuted>}
-                  </TagList>
-                </PrefCard>
-                <PrefCard>
-                  <PrefLabel>Dial Colors</PrefLabel>
-                  <TagList>
-                    {preferences.dial_colors.length > 0
-                      ? preferences.dial_colors.map(c => <Tag key={c}>{c}</Tag>)
-                      : <PrefMuted>None selected</PrefMuted>}
-                  </TagList>
-                </PrefCard>
-              </PrefsGrid>
-            )}
-          </GlassCard>
-        )}
-
-        {/* ── Favorites Tab ── */}
-        {activeTab === 'favorites' && (
-          <GlassCard>
-            <CardTitle>My Favorites</CardTitle>
-            {favorites.length === 0 ? (
-              <EmptyBox>
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                </svg>
-                <EmptyTitle>No favorites yet</EmptyTitle>
-                <EmptyHint>Browse watches and tap the heart to save them here.</EmptyHint>
-                <PrimaryBtn onClick={() => navigate('/brands')}>Browse Watches</PrimaryBtn>
-              </EmptyBox>
-            ) : (
-              <WatchGrid>
-                {favorites.map((watch) => (
-                  <WatchCard key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
-                    <WatchImgWrap>
-                      <WatchImg src={getImageUrl(watch.image_url)} alt={watch.model_name} />
-                      <ImgOverlay />
-                      <RemoveBtn onClick={(e) => { e.stopPropagation(); handleRemoveFavorite(watch.id); }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      </RemoveBtn>
-                    </WatchImgWrap>
-                    <WatchBody>
-                      <WatchName>{watch.model_name}</WatchName>
-                      <WatchFamily>{watch.family_name}</WatchFamily>
-                      <WatchFooter>
-                        <WatchYear>{watch.year_produced}</WatchYear>
-                        {watch.price_eur && <WatchPrice>${watch.price_eur.toLocaleString()}</WatchPrice>}
-                      </WatchFooter>
-                    </WatchBody>
-                  </WatchCard>
+              <BtnRow>
+                <PrimaryBtn type="submit" disabled={saving}>{saving ? 'Saving…' : 'Save changes'}</PrimaryBtn>
+                <SecondaryBtn type="button" onClick={cancelEditing}>Cancel</SecondaryBtn>
+              </BtnRow>
+            </Form>
+          ) : (
+            <>
+              <SectionHead>
+                <SectionTitle>Watch preferences</SectionTitle>
+                {saved && <SavedNote>Saved</SavedNote>}
+              </SectionHead>
+              <PrefTable>
+                <PrefRow>
+                  <PrefLabel>Price range</PrefLabel>
+                  <PrefValue>{formatPrice(preferences.price_range_min)} – {formatPrice(preferences.price_range_max)}</PrefValue>
+                </PrefRow>
+                {CHIP_GROUPS.map(group => (
+                  <PrefRow key={group.key}>
+                    <PrefLabel>{group.label}</PrefLabel>
+                    <PrefValue>
+                      {preferences[group.key].length > 0
+                        ? <Tags>{preferences[group.key].map(v => <Tag key={v}>{v}</Tag>)}</Tags>
+                        : <Muted>Any</Muted>}
+                    </PrefValue>
+                  </PrefRow>
                 ))}
-              </WatchGrid>
-            )}
-          </GlassCard>
+              </PrefTable>
+            </>
+          )
         )}
 
-        {/* ── Lists Tab ── */}
+        {/* ── Favorites ── */}
+        {activeTab === 'favorites' && (
+          favorites.length === 0
+            ? emptyState('No favorites yet', 'Tap the heart on any watch to save it here.')
+            : (
+              <Grid>
+                {favorites.map(watch => (
+                  <Card key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
+                    <ImgWrap>
+                      <Img src={getImageUrl(watch.image_url)} alt={watch.model_name} loading="lazy" />
+                      <RemoveBtn
+                        aria-label="Remove from favorites"
+                        onClick={e => { e.stopPropagation(); handleRemoveFavorite(watch.id); }}
+                      >{removeIcon}</RemoveBtn>
+                    </ImgWrap>
+                    <Body>
+                      <Model>{watch.model_name}</Model>
+                      <Family>{watch.family_name}</Family>
+                      <Bottom>
+                        <Tags>{watch.year_produced && <Tag>{watch.year_produced}</Tag>}</Tags>
+                        {watch.price_eur && <Price>{formatPrice(watch.price_eur)}</Price>}
+                      </Bottom>
+                    </Body>
+                  </Card>
+                ))}
+              </Grid>
+            )
+        )}
+
+        {/* ── Lists ── */}
         {activeTab === 'lists' && (
-          <GlassCard>
-            <CardTitle>My Lists</CardTitle>
-            {lists.length === 0 ? (
-              <EmptyBox>
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-                </svg>
-                <EmptyTitle>No lists yet</EmptyTitle>
-                <EmptyHint>Create a list from any watch detail page.</EmptyHint>
-                <PrimaryBtn onClick={() => navigate('/brands')}>Browse Watches</PrimaryBtn>
-              </EmptyBox>
-            ) : (
+          lists.length === 0
+            ? emptyState('No lists yet', 'Create a list from any watch page to group watches you are comparing.')
+            : (
               <ListStack>
-                {lists.map((list: WatchList) => (
-                  <ListBlock key={list.id}>
-                    <ListHead>
-                      <ListTitle>{list.name}<ListCount>{list.items?.length || 0} watches</ListCount></ListTitle>
-                      <DeleteBtn onClick={() => handleDeleteList(list.id)}>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                        </svg>
-                      </DeleteBtn>
-                    </ListHead>
-                    {list.items && list.items.length > 0 ? (
-                      <ListItems>
-                        {list.items.map((watch: Watch) => (
-                          <ListItem key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
-                            <ListItemImg src={getImageUrl(watch.image_url)} alt={watch.model_name} />
-                            <ListItemText>
-                              <ListItemName>{watch.model_name}</ListItemName>
-                              {watch.price_eur && <ListItemPrice>${watch.price_eur.toLocaleString()}</ListItemPrice>}
-                            </ListItemText>
-                            <RemoveBtn onClick={(e) => { e.stopPropagation(); removeFromList(list.id, watch.id); }}>
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                              </svg>
-                            </RemoveBtn>
-                          </ListItem>
+                {lists.map(list => (
+                  <section key={list.id}>
+                    <SectionHead>
+                      <SectionTitle>
+                        {list.name}
+                        <SectionCount>{list.items.length} {list.items.length === 1 ? 'watch' : 'watches'}</SectionCount>
+                      </SectionTitle>
+                      <TextBtn $danger onClick={() => handleDeleteList(list)}>Delete list</TextBtn>
+                    </SectionHead>
+                    {list.items.length > 0 ? (
+                      <Grid $compact>
+                        {list.items.map(watch => (
+                          <Card key={watch.id} onClick={() => navigate(`/watch/${watch.id}`)}>
+                            <ImgWrap>
+                              <Img $compact src={getImageUrl(watch.image_url)} alt={watch.model_name} loading="lazy" />
+                              <RemoveBtn
+                                aria-label={`Remove from ${list.name}`}
+                                onClick={e => { e.stopPropagation(); removeFromList(list.id, watch.id); }}
+                              >{removeIcon}</RemoveBtn>
+                            </ImgWrap>
+                            <Body $compact>
+                              <Model>{watch.model_name}</Model>
+                              {watch.price_eur && <Price $small>{formatPrice(watch.price_eur)}</Price>}
+                            </Body>
+                          </Card>
                         ))}
-                      </ListItems>
+                      </Grid>
                     ) : (
-                      <ListEmpty>No watches in this list yet</ListEmpty>
+                      <ListEmpty>No watches in this list yet.</ListEmpty>
                     )}
-                  </ListBlock>
+                  </section>
                 ))}
               </ListStack>
-            )}
-          </GlassCard>
+            )
         )}
-        {/* ── Collection Tab ── */}
+
+        {/* ── Collection ── */}
         {activeTab === 'collection' && (
-          <GlassCard>
-            <CardTitle>My Collection</CardTitle>
-            {collection.length > 0 && (
-              <CollectionStats>
-                <StatCard>
-                  <StatNum>{collection.length}</StatNum>
-                  <StatLbl>Watches</StatLbl>
-                </StatCard>
-                <StatCard>
-                  <StatNum>${collection.reduce((sum, item) => sum + (item.watch?.price_eur || 0), 0).toLocaleString()}</StatNum>
-                  <StatLbl>Market Value</StatLbl>
-                </StatCard>
-                <StatCard>
-                  <StatNum>${collection.reduce((sum, item) => sum + (item.purchase_price || 0), 0).toLocaleString()}</StatNum>
-                  <StatLbl>Total Paid</StatLbl>
-                </StatCard>
-              </CollectionStats>
-            )}
-            {collection.length === 0 ? (
-              <EmptyBox>
-                <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
-                </svg>
-                <EmptyTitle>No watches in your collection</EmptyTitle>
-                <EmptyHint>Add watches you own from any watch detail page.</EmptyHint>
-                <PrimaryBtn onClick={() => navigate('/brands')}>Browse Watches</PrimaryBtn>
-              </EmptyBox>
-            ) : (
-              <WatchGrid>
-                {collection.map((item) => (
-                  <WatchCard key={item.id} onClick={() => navigate(`/watch/${item.watch.id}`)}>
-                    <WatchImgWrap>
-                      <WatchImg src={getImageUrl(item.watch.image_url)} alt={item.watch.model_name} />
-                      <ImgOverlay />
-                      <RemoveBtn onClick={(e) => { e.stopPropagation(); handleRemoveFromCollection(item.id); }}>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                        </svg>
-                      </RemoveBtn>
-                    </WatchImgWrap>
-                    <WatchBody>
-                      <WatchName>{item.watch.model_name}</WatchName>
-                      <WatchFamily>{item.watch.family_name}</WatchFamily>
-                      <CollectionMeta>
-                        {item.purchase_price && (
-                          <CollectionPaid>Paid: ${item.purchase_price.toLocaleString()}</CollectionPaid>
-                        )}
-                        {item.watch.price_eur && (
-                          <WatchPrice>Market: ${item.watch.price_eur.toLocaleString()}</WatchPrice>
-                        )}
-                        {item.purchase_price && item.watch.price_eur && (
-                          <CollectionGain gained={item.watch.price_eur >= item.purchase_price}>
-                            {item.watch.price_eur >= item.purchase_price ? '+' : ''}
-                            ${(item.watch.price_eur - item.purchase_price).toLocaleString()}
-                          </CollectionGain>
-                        )}
-                      </CollectionMeta>
-                      {item.purchase_date && (
-                        <CollectionDate>Purchased: {new Date(item.purchase_date).toLocaleDateString()}</CollectionDate>
-                      )}
-                    </WatchBody>
-                  </WatchCard>
-                ))}
-              </WatchGrid>
-            )}
-          </GlassCard>
+          collection.length === 0
+            ? emptyState('Your collection is empty', 'Add watches you own from any watch page to track what they are worth.')
+            : (
+              <>
+                <Summary>
+                  <SummaryItem>
+                    <SummaryLabel>Watches</SummaryLabel>
+                    <SummaryValue>{collection.length}</SummaryValue>
+                  </SummaryItem>
+                  <SummaryItem>
+                    <SummaryLabel>Market value</SummaryLabel>
+                    <SummaryValue>{formatPrice(marketValue)}</SummaryValue>
+                  </SummaryItem>
+                  <SummaryItem>
+                    <SummaryLabel>Total paid</SummaryLabel>
+                    <SummaryValue>{totalPaid > 0 ? formatPrice(totalPaid) : '—'}</SummaryValue>
+                  </SummaryItem>
+                  <SummaryItem>
+                    <SummaryLabel>Change</SummaryLabel>
+                    <SummaryValue $tone={priced.length === 0 ? undefined : valueChange >= 0 ? 'up' : 'down'}>
+                      {priced.length === 0 ? '—' : `${valueChange >= 0 ? '+' : '−'}${formatPrice(Math.abs(valueChange))}`}
+                    </SummaryValue>
+                  </SummaryItem>
+                </Summary>
+
+                <Grid>
+                  {collection.map(item => {
+                    const change = item.purchase_price && item.watch.price_eur
+                      ? item.watch.price_eur - item.purchase_price
+                      : null;
+                    return (
+                      <Card key={item.id} onClick={() => navigate(`/watch/${item.watch.id}`)}>
+                        <ImgWrap>
+                          <Img src={getImageUrl(item.watch.image_url)} alt={item.watch.model_name} loading="lazy" />
+                          <RemoveBtn
+                            aria-label="Remove from collection"
+                            onClick={e => { e.stopPropagation(); handleRemoveFromCollection(item.id); }}
+                          >{removeIcon}</RemoveBtn>
+                        </ImgWrap>
+                        <Body>
+                          <Model>{item.watch.model_name}</Model>
+                          <Family>{item.watch.family_name}</Family>
+                          <Ledger>
+                            <LedgerRow>
+                              <span>Paid</span>
+                              <span>{item.purchase_price ? formatPrice(item.purchase_price) : '—'}</span>
+                            </LedgerRow>
+                            <LedgerRow>
+                              <span>Market</span>
+                              <span>{item.watch.price_eur ? formatPrice(item.watch.price_eur) : '—'}</span>
+                            </LedgerRow>
+                            {change !== null && (
+                              <LedgerRow $tone={change >= 0 ? 'up' : 'down'}>
+                                <span>Change</span>
+                                <span>{change >= 0 ? '+' : '−'}{formatPrice(Math.abs(change))}</span>
+                              </LedgerRow>
+                            )}
+                          </Ledger>
+                          {item.purchase_date && (
+                            <Purchased>Bought {new Date(item.purchase_date).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</Purchased>
+                          )}
+                        </Body>
+                      </Card>
+                    );
+                  })}
+                </Grid>
+              </>
+            )
         )}
       </Content>
-    </Container>
+
+      {/* ── Upload modal ── */}
+      {isEditingProfile && (
+        <ModalOverlay onClick={closeUploadModal}>
+          <Modal onClick={e => e.stopPropagation()} role="dialog" aria-labelledby="upload-title">
+            <ModalHead>
+              <ModalTitle id="upload-title">Profile picture</ModalTitle>
+              <CloseBtn onClick={closeUploadModal} aria-label="Close">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </CloseBtn>
+            </ModalHead>
+            {previewUrl ? (
+              <ImgPreview src={previewUrl} alt="Preview" />
+            ) : (
+              <UploadZone type="button" onClick={() => fileInputRef.current?.click()}>
+                <UploadLabel>Choose a photo</UploadLabel>
+                <UploadHint>JPG or PNG, up to 5MB</UploadHint>
+              </UploadZone>
+            )}
+            {uploadError && <ModalError role="alert">{uploadError}</ModalError>}
+            <HiddenInput type="file" ref={fileInputRef} onChange={handleImageSelect} accept="image/*" />
+            {previewUrl && (
+              <BtnRow>
+                <PrimaryBtn onClick={handleImageUpload} disabled={uploading}>
+                  {uploading ? 'Uploading…' : 'Save photo'}
+                </PrimaryBtn>
+                <SecondaryBtn onClick={() => { setSelectedImage(null); setPreviewUrl(null); }}>
+                  Choose another
+                </SecondaryBtn>
+              </BtnRow>
+            )}
+          </Modal>
+        </ModalOverlay>
+      )}
+
+      <Footer />
+    </Page>
   );
 }
 
-/* ════════════════════════════════════════
-   STYLED COMPONENTS
-   ════════════════════════════════════════ */
+/* ═══ Animations ═══ */
 
-const Container = styled.div`
-  min-height: 100vh;
-  background: #0a0a0a;
-  font-family: 'Inter', sans-serif;
+const fadeIn = keyframes`
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 `;
 
-const Content = styled.div`
+const pulse = keyframes`
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+`;
+
+/* ═══ Layout ═══ */
+
+const Page = styled.div`
+  min-height: 100vh;
+  background: #0a0a0a;
+  color: #e8e8e3;
+  font-family: 'Inter', -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+`;
+
+const Content = styled.main`
   max-width: 1100px;
   margin: 0 auto;
-  padding: 1.5rem 2rem 4rem;
+  padding: 2.5rem 2rem 5rem;
+  animation: ${fadeIn} 0.4s ease-out;
+
+  @media (max-width: 640px) {
+    padding: 1.5rem 1.25rem 4rem;
+  }
 `;
 
-const Loading = styled.div`
-  min-height: 100vh;
+const LoadWrap = styled.div`
   display: flex;
-  align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
-  color: rgba(255,255,255,0.5);
-  font-family: 'Inter', sans-serif;
-  background: #0a0a0a;
+  gap: 0.4rem;
+  padding: 8rem 0;
+`;
+
+const Dot = styled.div`
+  width: 6px;
+  height: 6px;
+  background: #555;
+  border-radius: 50%;
+  animation: ${pulse} 1s ease-in-out infinite;
+  &:nth-child(2) { animation-delay: 0.15s; }
+  &:nth-child(3) { animation-delay: 0.3s; }
 `;
 
 const ErrorMsg = styled.div`
-  color: #fca5a5;
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
+  color: #d98080;
+  border: 1px solid #2a1717;
+  background: #120c0c;
+  padding: 0.8rem 1rem;
+  border-radius: 8px;
   margin-bottom: 1.5rem;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 `;
 
-/* ── Profile Header ── */
+/* ═══ Header ═══ */
 
-const ProfileHeader = styled.div`
-  border-bottom: 1px solid #141414;
-  padding: 2rem 0;
-  margin-bottom: 1.5rem;
-`;
-
-const ProfileTopRow = styled.div`
+const Header = styled.header`
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 2rem;
+  align-items: flex-start;
+  gap: 2rem;
+  padding-bottom: 2.5rem;
+
+  @media (max-width: 640px) {
+    flex-direction: column;
+    gap: 1.5rem;
+    padding-bottom: 2rem;
+  }
 `;
 
-const ProfileLeft = styled.div`
+const Identity = styled.div`
   display: flex;
   align-items: center;
-  gap: 2rem;
+  gap: 1.5rem;
+  min-width: 0;
+
+  @media (max-width: 640px) {
+    gap: 1rem;
+  }
 `;
 
-const ProfilePicture = styled.div`
+const AvatarBtn = styled.button`
   position: relative;
   flex-shrink: 0;
-`;
-
-const ProfileImage = styled.img`
-  width: 100px;
-  height: 100px;
+  width: 88px;
+  height: 88px;
+  padding: 0;
   border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid rgba(255,255,255,0.15);
-  background: rgba(255,255,255,0.05);
-`;
-
-const EditPicBtn = styled.button`
-  position: absolute;
-  bottom: -2px;
-  right: -2px;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.2);
-  color: rgba(255,255,255,0.8);
+  border: 1px solid #1e1e1e;
+  background: #141414;
+  overflow: hidden;
   cursor: pointer;
+
+  @media (max-width: 640px) {
+    width: 64px;
+    height: 64px;
+  }
+`;
+
+const AvatarImg = styled.img`
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+`;
+
+const AvatarInitials = styled.span`
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
+  width: 100%;
+  height: 100%;
+  font-family: 'Georgia', serif;
+  font-size: 1.8rem;
+  color: #8a8a85;
 
-  &:hover {
-    background: rgba(255,255,255,0.2);
-    color: #fff;
+  @media (max-width: 640px) {
+    font-size: 1.3rem;
   }
 `;
 
-const ProfileText = styled.div`
+const AvatarHover = styled.span`
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  color: #e8e8e3;
+  font-size: 0.7rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  transition: opacity 0.15s;
+
+  ${AvatarBtn}:hover &,
+  ${AvatarBtn}:focus-visible & {
+    opacity: 1;
+  }
+`;
+
+const IdentityText = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: 0.4rem;
+  min-width: 0;
 `;
 
-const Name = styled.h1`
+const Name = styled.h1<{ $placeholder?: boolean }>`
   margin: 0;
-  font-family: 'Georgia', serif;
-  font-size: 1.5rem;
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-size: clamp(1.6rem, 3vw, 2.1rem);
   font-weight: 400;
-  color: #f5f5f0;
-  line-height: 1.2;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: ${p => p.$placeholder ? '#4a4a4a' : '#f5f5f0'};
 `;
 
-const Bio = styled.p`
+const Bio = styled.p<{ $link?: boolean }>`
   margin: 0;
-  color: rgba(255,255,255,0.5);
-  font-size: 0.95rem;
-  font-weight: 400;
-  max-width: 400px;
+  max-width: 460px;
+  font-size: 0.9rem;
   line-height: 1.5;
+  color: #7a7a75;
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: inherit;
+  text-align: left;
+  ${p => p.$link && `
+    cursor: pointer;
+    color: #4a4a4a;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    &:hover { color: #888; }
+  `}
 `;
 
-const LogoutButton = styled.button`
+const Meta = styled.div`
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  color: #4a4a4a;
+  letter-spacing: 0.02em;
+`;
+
+const Sep = styled.span`
+  margin: 0 0.5rem;
+  color: #2a2a2a;
+`;
+
+const HeaderActions = styled.div`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.6rem 1.2rem;
-  background: rgba(239, 68, 68, 0.1);
-  color: #fca5a5;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-  border-radius: 10px;
-  cursor: pointer;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba(239, 68, 68, 0.2);
-    color: #fecaca;
-  }
+  flex-shrink: 0;
 `;
 
-const StatsRow = styled.div`
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-`;
+/* ═══ Buttons ═══ */
 
-const StatCard = styled.div`
-  text-align: center;
-  padding: 1rem;
-  border-right: 1px solid #141414;
-  &:last-child { border-right: none; }
-`;
-
-const StatNum = styled.div`
-  font-size: 1.8rem;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.2;
-`;
-
-const StatLbl = styled.div`
-  font-size: 0.75rem;
-  color: rgba(255,255,255,0.4);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-top: 0.25rem;
-`;
-
-/* ── Tabs ── */
-
-const TabBar = styled.div`
-  display: flex;
-  gap: 0;
-  border-bottom: 1px solid #141414;
-  margin-bottom: 2rem;
-`;
-
-const TabBtn = styled.button<{ active: boolean }>`
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.75rem 1.25rem;
-  background: none;
-  color: ${p => p.active ? '#e8e8e3' : '#4a4a4a'};
+const PrimaryBtn = styled.button`
+  padding: 0.6rem 1.3rem;
+  background: #f5f5f0;
+  color: #0a0a0a;
   border: none;
-  border-bottom: 2px solid ${p => p.active ? '#e8e8e3' : 'transparent'};
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
   cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+
+  &:hover { opacity: 0.85; }
+  &:disabled { opacity: 0.4; cursor: default; }
+`;
+
+const SecondaryBtn = styled.button`
+  padding: 0.6rem 1.2rem;
+  background: transparent;
+  color: #a8a8a3;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
   font-size: 0.8rem;
   font-weight: 500;
   font-family: inherit;
+  cursor: pointer;
   transition: all 0.15s;
+  white-space: nowrap;
+
+  &:hover {
+    color: #e8e8e3;
+    border-color: #333;
+  }
+`;
+
+const TextBtn = styled.button<{ $danger?: boolean }>`
+  padding: 0.6rem 0.8rem;
+  background: none;
+  border: none;
+  color: #4a4a4a;
+  font-size: 0.8rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+  white-space: nowrap;
+
+  &:hover { color: ${p => p.$danger ? '#d98080' : '#999'}; }
+`;
+
+const BtnRow = styled.div`
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+`;
+
+/* ═══ Tabs ═══ */
+
+const TabBar = styled.div`
+  display: flex;
+  gap: 2rem;
+  border-bottom: 1px solid #151515;
+  margin-bottom: 2.5rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+
+  @media (max-width: 640px) {
+    gap: 1.1rem;
+    margin-bottom: 2rem;
+  }
+`;
+
+const TabBtn = styled.button<{ $active: boolean }>`
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0 0.9rem;
   margin-bottom: -1px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid ${p => p.$active ? '#e8e8e3' : 'transparent'};
+  color: ${p => p.$active ? '#e8e8e3' : '#4a4a4a'};
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: inherit;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s;
 
-  &:hover { color: ${p => p.active ? '#e8e8e3' : '#888'}; }
+  &:hover { color: ${p => p.$active ? '#e8e8e3' : '#888'}; }
 
-  svg { opacity: ${p => p.active ? 1 : 0.4}; }
+  @media (max-width: 640px) {
+    font-size: 0.7rem;
+    letter-spacing: 0.03em;
+  }
 `;
 
-/* ── Glass Card (shared container for tab content) ── */
-
-const GlassCard = styled.div`
-  padding: 0;
+const TabCount = styled.span`
+  font-size: 0.7rem;
+  color: #3a3a3a;
+  letter-spacing: 0;
 `;
 
-const CardHeader = styled.div`
+/* ═══ Sections ═══ */
+
+const SectionHead = styled.div`
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
 `;
 
-const CardTitle = styled.h2`
-  margin: 0 0 1.5rem;
+const SectionTitle = styled.h2`
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  margin: 0;
   font-family: 'Georgia', serif;
   font-size: 1.2rem;
   font-weight: 400;
   color: #f5f5f0;
 `;
 
-const EditBtn = styled.button`
-  padding: 0.5rem 1.2rem;
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.7);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  font-size: 0.85rem;
-  transition: all 0.2s ease;
+const SectionCount = styled.span`
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  color: #4a4a4a;
+`;
 
-  &:hover {
-    background: rgba(255,255,255,0.1);
-    color: #fff;
+const SavedNote = styled.span`
+  font-size: 0.75rem;
+  color: #7fbf8e;
+  animation: ${fadeIn} 0.2s ease-out;
+`;
+
+/* ═══ Preferences view ═══ */
+
+const PrefTable = styled.dl`
+  margin: 0;
+  border-top: 1px solid #151515;
+`;
+
+const PrefRow = styled.div`
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.1rem 0;
+  border-bottom: 1px solid #151515;
+
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
   }
 `;
 
-/* ── Preferences Display ── */
-
-const PrefsGrid = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 1rem;
-`;
-
-const PrefCard = styled.div`
-  padding: 1.25rem 1.5rem;
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 14px;
-`;
-
-const PrefLabel = styled.div`
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.35);
+const PrefLabel = styled.dt`
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #4a4a4a;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  margin-bottom: 0.6rem;
+  letter-spacing: 0.1em;
 `;
 
-const PrefValue = styled.div`
-  color: #ffffff;
-  font-weight: 600;
-  font-size: 1.05rem;
-`;
-
-const PrefMuted = styled.span`
-  color: rgba(255,255,255,0.25);
+const PrefValue = styled.dd`
+  margin: 0;
   font-size: 0.9rem;
-  font-style: italic;
+  color: #e8e8e3;
 `;
 
-const TagList = styled.div`
+const Muted = styled.span`
+  color: #3a3a3a;
+`;
+
+const Tags = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 0.4rem;
+  gap: 0.35rem;
 `;
 
 const Tag = styled.span`
-  display: inline-block;
-  padding: 0.3rem 0.75rem;
-  background: rgba(99, 102, 241, 0.15);
-  color: #a5b4fc;
-  border-radius: 6px;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  color: #a8a8a3;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #1e1e1e;
+  border-radius: 4px;
+`;
+
+/* ═══ Preferences form ═══ */
+
+const Form = styled.form`
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  max-width: 640px;
+`;
+
+const Field = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  flex: 1;
+`;
+
+const FieldLabel = styled.label`
+  font-size: 0.7rem;
   font-weight: 500;
+  color: #5a5a5a;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
 `;
 
-/* ── Preferences Edit Form ── */
+const inputStyles = `
+  width: 100%;
+  box-sizing: border-box;
+  background: #141414;
+  border: 1px solid #1e1e1e;
+  border-radius: 8px;
+  color: #e8e8e3;
+  font-size: 0.9rem;
+  font-family: inherit;
+  padding: 0.7rem 0.9rem;
+  transition: border-color 0.15s;
 
-const FormSection = styled.div`
-  margin-bottom: 2rem;
+  &:focus {
+    outline: none;
+    border-color: #3a3a3a;
+  }
+
+  &::placeholder { color: #3a3a3a; }
 `;
 
-const FormLabel = styled.div`
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: rgba(255,255,255,0.6);
-  margin-bottom: 0.75rem;
+const TextInput = styled.input`
+  ${inputStyles}
+`;
+
+const TextArea = styled.textarea`
+  ${inputStyles}
+  resize: vertical;
+  line-height: 1.5;
 `;
 
 const PriceRow = styled.div`
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 0.75rem;
 `;
 
-const PriceField = styled.input`
-  padding: 0.75rem 1rem;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  color: #ffffff;
-  font-family: 'Montserrat', sans-serif;
-  font-size: 0.95rem;
-  font-weight: 500;
+const PriceInputWrap = styled.div`
+  position: relative;
   width: 160px;
-  transition: all 0.2s ease;
 
-  &:focus {
-    outline: none;
-    border-color: rgba(99, 102, 241, 0.5);
-    background: rgba(255,255,255,0.08);
+  span {
+    position: absolute;
+    left: 0.9rem;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #4a4a4a;
+    font-size: 0.9rem;
+    pointer-events: none;
   }
 
-  &::placeholder { color: rgba(255,255,255,0.25); }
+  input { padding-left: 1.75rem; }
 `;
 
 const PriceDivider = styled.span`
-  color: rgba(255,255,255,0.3);
-  font-size: 0.9rem;
+  color: #4a4a4a;
+  font-size: 0.8rem;
 `;
 
 const ChipGrid = styled.div`
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.4rem;
 `;
 
-const Chip = styled.button<{ selected: boolean }>`
-  padding: 0.55rem 1.1rem;
-  background: ${p => p.selected ? 'rgba(99, 102, 241, 0.25)' : 'rgba(255,255,255,0.04)'};
-  color: ${p => p.selected ? '#a5b4fc' : 'rgba(255,255,255,0.5)'};
-  border: 1px solid ${p => p.selected ? 'rgba(99, 102, 241, 0.4)' : 'rgba(255,255,255,0.08)'};
-  border-radius: 8px;
-  cursor: pointer;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  font-size: 0.85rem;
-  transition: all 0.15s ease;
-
-  &:hover {
-    background: ${p => p.selected ? 'rgba(99, 102, 241, 0.3)' : 'rgba(255,255,255,0.08)'};
-    color: ${p => p.selected ? '#c4b5fd' : 'rgba(255,255,255,0.7)'};
-  }
-`;
-
-/* ── Buttons ── */
-
-const BtnRow = styled.div`
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 2rem;
-  justify-content: center;
-`;
-
-const PrimaryBtn = styled.button`
-  padding: 0.65rem 1.5rem;
-  background: #f5f5f0;
-  color: #0a0a0a;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-family: inherit;
-  font-weight: 600;
-  font-size: 0.8rem;
-  transition: opacity 0.15s;
-  &:hover { opacity: 0.85; }
-  &:disabled { opacity: 0.3; cursor: default; }
-`;
-
-const SecondaryBtn = styled.button`
-  padding: 0.75rem 1.5rem;
-  background: rgba(255,255,255,0.06);
-  color: rgba(255,255,255,0.6);
-  border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 10px;
-  cursor: pointer;
-  font-family: 'Montserrat', sans-serif;
-  font-weight: 500;
-  font-size: 0.9rem;
-  transition: all 0.2s ease;
-
-  &:hover {
-    background: rgba(255,255,255,0.1);
-    color: rgba(255,255,255,0.8);
-  }
-`;
-
-/* ── Modal ── */
-
-const ModalOverlay = styled.div`
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.7);
-  backdrop-filter: blur(8px);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-`;
-
-const Modal = styled.div`
-  background: #1a1a2e;
-  border: 1px solid rgba(255,255,255,0.1);
+const Chip = styled.button<{ $selected: boolean }>`
+  padding: 0.45rem 0.95rem;
+  background: ${p => p.$selected ? '#f5f5f0' : 'transparent'};
+  color: ${p => p.$selected ? '#0a0a0a' : '#6a6a6a'};
+  border: 1px solid ${p => p.$selected ? '#f5f5f0' : '#1e1e1e'};
   border-radius: 20px;
-  width: 90%;
-  max-width: 480px;
-  box-shadow: 0 25px 60px rgba(0,0,0,0.5);
-`;
-
-const ModalHead = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 1.75rem;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
-`;
-
-const ModalTitle = styled.h3`
-  margin: 0;
-  color: #ffffff;
-  font-size: 1.1rem;
-  font-weight: 600;
-`;
-
-const CloseBtn = styled.button`
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.4);
+  font-size: 0.78rem;
+  font-weight: ${p => p.$selected ? 600 : 400};
+  font-family: inherit;
   cursor: pointer;
-  padding: 4px;
-  display: flex;
-  transition: color 0.2s;
-  &:hover { color: #fff; }
-`;
-
-const ModalBody = styled.div`
-  padding: 2rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1.25rem;
-`;
-
-const UploadZone = styled.div`
-  width: 100%;
-  height: 200px;
-  border: 2px dashed rgba(255,255,255,0.12);
-  border-radius: 14px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  gap: 0.75rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: rgba(255,255,255,0.02);
+  transition: all 0.15s;
 
   &:hover {
-    border-color: rgba(99, 102, 241, 0.4);
-    background: rgba(99, 102, 241, 0.05);
+    color: ${p => p.$selected ? '#0a0a0a' : '#aaa'};
+    border-color: ${p => p.$selected ? '#f5f5f0' : '#333'};
   }
 `;
 
-const UploadLabel = styled.p`
-  margin: 0;
-  color: rgba(255,255,255,0.6);
-  font-size: 0.95rem;
-  font-weight: 500;
-`;
+/* ═══ Watch grid (matches search results) ═══ */
 
-const UploadHint = styled.p`
-  margin: 0;
-  color: rgba(255,255,255,0.25);
-  font-size: 0.8rem;
-`;
-
-const HiddenInput = styled.input`display: none;`;
-
-const ImgPreview = styled.img`
-  max-width: 100%;
-  max-height: 280px;
-  object-fit: contain;
-  border-radius: 12px;
-`;
-
-/* ── Watch Grid (Favorites) ── */
-
-const WatchGrid = styled.div`
+const Grid = styled.div<{ $compact?: boolean }>`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 1.25rem;
-`;
+  grid-template-columns: repeat(auto-fill, minmax(${p => p.$compact ? '200px' : '250px'}, 1fr));
+  gap: 1px;
+  padding: 1px;
 
-const WatchCard = styled.div`
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px;
-  overflow: hidden;
-  cursor: pointer;
-  transition: all 0.25s ease;
-
-  &:hover {
-    transform: translateY(-4px);
-    border-color: rgba(255,255,255,0.15);
-    box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+  @media (max-width: 640px) {
+    grid-template-columns: repeat(2, 1fr);
   }
 `;
 
-const WatchImgWrap = styled.div`
+// Hairlines drawn per card (not via grid background) so a partly filled last row stays clean
+const Card = styled.div`
+  background: #0a0a0a;
+  box-shadow: 0 0 0 1px #151515;
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 0.2s;
+  animation: ${fadeIn} 0.3s ease-out both;
+
+  &:hover { background: #111; }
+`;
+
+const ImgWrap = styled.div`
   position: relative;
+  background: #0d0d0d;
   overflow: hidden;
 `;
 
-const WatchImg = styled.img`
+const Img = styled.img<{ $compact?: boolean }>`
   width: 100%;
-  height: 200px;
+  height: ${p => p.$compact ? '170px' : '220px'};
   object-fit: cover;
   display: block;
-`;
+  opacity: 0.9;
+  transition: opacity 0.3s, transform 0.5s;
 
-const ImgOverlay = styled.div`
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 50%);
-  pointer-events: none;
+  ${Card}:hover & {
+    opacity: 1;
+    transform: scale(1.03);
+  }
+
+  @media (max-width: 640px) {
+    height: 160px;
+  }
 `;
 
 const RemoveBtn = styled.button`
   position: absolute;
-  top: 0.6rem;
-  right: 0.6rem;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(4px);
-  border: none;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 26px;
+  height: 26px;
   display: flex;
   align-items: center;
   justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: rgba(10, 10, 10, 0.75);
+  color: #aaa;
   cursor: pointer;
-  color: rgba(255,255,255,0.7);
-  transition: all 0.15s ease;
   opacity: 0;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
 
-  ${WatchCard}:hover &,
-  ${() => ListItem}:hover & {
+  ${Card}:hover &,
+  &:focus-visible {
+    opacity: 1;
+  }
+
+  /* No hover on touch screens, so keep it visible */
+  @media (hover: none) {
     opacity: 1;
   }
 
   &:hover {
-    background: rgba(239, 68, 68, 0.8);
-    color: #fff;
+    background: #f5f5f0;
+    color: #0a0a0a;
   }
 `;
 
-const WatchBody = styled.div`
-  padding: 1.1rem 1.25rem;
+const Body = styled.div<{ $compact?: boolean }>`
+  padding: ${p => p.$compact ? '0.8rem 1rem 1rem' : '1rem 1.2rem 1.2rem'};
 `;
 
-const WatchName = styled.h3`
+const Model = styled.h3`
   margin: 0;
-  color: #ffffff;
-  font-size: 0.95rem;
-  font-weight: 600;
-  line-height: 1.3;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #e8e8e3;
+  line-height: 1.35;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 `;
 
-const WatchFamily = styled.p`
-  margin: 0.3rem 0 0;
-  color: rgba(255,255,255,0.4);
-  font-size: 0.8rem;
-  font-weight: 500;
+const Family = styled.p`
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: #444;
 `;
 
-const WatchFooter = styled.div`
+const Bottom = styled.div`
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  align-items: flex-end;
+  margin-top: 0.8rem;
 `;
 
-const WatchYear = styled.span`
-  color: rgba(255,255,255,0.3);
-  font-size: 0.8rem;
+const Price = styled.span<{ $small?: boolean }>`
+  display: block;
+  margin-top: ${p => p.$small ? '0.4rem' : '0'};
+  font-size: ${p => p.$small ? '0.8rem' : '0.85rem'};
   font-weight: 500;
+  color: #e8e8e3;
+  letter-spacing: -0.01em;
 `;
 
-const WatchPrice = styled.span`
-  color: #4ade80;
-  font-weight: 700;
-  font-size: 0.9rem;
-`;
-
-/* ── Lists ── */
+/* ═══ Lists ═══ */
 
 const ListStack = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-`;
-
-const ListBlock = styled.div`
-  background: rgba(255,255,255,0.02);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 16px;
-  overflow: hidden;
-`;
-
-const ListHead = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-`;
-
-const ListTitle = styled.h3`
-  margin: 0;
-  color: #ffffff;
-  font-size: 1.05rem;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-`;
-
-const ListCount = styled.span`
-  font-size: 0.75rem;
-  font-weight: 500;
-  color: rgba(255,255,255,0.3);
-  background: rgba(255,255,255,0.05);
-  padding: 0.2rem 0.6rem;
-  border-radius: 6px;
-`;
-
-const DeleteBtn = styled.button`
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.25);
-  cursor: pointer;
-  padding: 0.4rem;
-  border-radius: 6px;
-  display: flex;
-  transition: all 0.15s;
-
-  &:hover {
-    color: #f87171;
-    background: rgba(239, 68, 68, 0.1);
-  }
-`;
-
-const ListItems = styled.div`
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
-  padding: 1.25rem;
-`;
-
-const ListItem = styled.div`
-  background: rgba(255,255,255,0.03);
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 12px;
-  overflow: hidden;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-
-  &:hover {
-    transform: translateY(-2px);
-    border-color: rgba(255,255,255,0.12);
-    box-shadow: 0 8px 25px rgba(0,0,0,0.2);
-  }
-`;
-
-const ListItemImg = styled.img`
-  width: 100%;
-  height: 130px;
-  object-fit: cover;
-  display: block;
-`;
-
-const ListItemText = styled.div`
-  padding: 0.75rem 1rem;
-`;
-
-const ListItemName = styled.h4`
-  margin: 0;
-  color: #ffffff;
-  font-size: 0.85rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-`;
-
-const ListItemPrice = styled.span`
-  color: #4ade80;
-  font-weight: 600;
-  font-size: 0.8rem;
-  display: block;
-  margin-top: 0.25rem;
+  gap: 3rem;
 `;
 
 const ListEmpty = styled.div`
-  padding: 2.5rem;
+  padding: 2rem;
   text-align: center;
-  color: rgba(255,255,255,0.2);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
+  color: #3a3a3a;
+  border: 1px dashed #1a1a1a;
+  border-radius: 12px;
 `;
 
-/* ── Empty States ── */
+/* ═══ Collection ═══ */
 
-const EmptyBox = styled.div`
+const toneColor = (tone?: 'up' | 'down') =>
+  tone === 'up' ? '#7fbf8e' : tone === 'down' ? '#d98080' : '#e8e8e3';
+
+const Summary = styled.div`
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-top: 1px solid #151515;
+  border-bottom: 1px solid #151515;
+  margin-bottom: 2rem;
+
+  @media (max-width: 640px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+`;
+
+const SummaryItem = styled.div`
+  padding: 1.25rem 0;
+
+  & + & {
+    padding-left: 1.5rem;
+    border-left: 1px solid #151515;
+  }
+
+  @media (max-width: 640px) {
+    &:nth-child(3) {
+      padding-left: 0;
+      border-left: none;
+      border-top: 1px solid #151515;
+    }
+    &:nth-child(4) { border-top: 1px solid #151515; }
+  }
+`;
+
+const SummaryLabel = styled.div`
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #4a4a4a;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.4rem;
+`;
+
+const SummaryValue = styled.div<{ $tone?: 'up' | 'down' }>`
+  font-family: 'Georgia', serif;
+  font-size: 1.5rem;
+  color: ${p => toneColor(p.$tone)};
+  letter-spacing: -0.01em;
+`;
+
+const Ledger = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid #151515;
+`;
+
+const LedgerRow = styled.div<{ $tone?: 'up' | 'down' }>`
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+
+  span:first-child { color: #4a4a4a; }
+  span:last-child { color: ${p => toneColor(p.$tone)}; font-weight: 500; }
+`;
+
+const Purchased = styled.div`
+  margin-top: 0.6rem;
+  font-size: 0.7rem;
+  color: #3a3a3a;
+`;
+
+/* ═══ Empty states ═══ */
+
+const Empty = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 3rem 2rem;
   text-align: center;
-  gap: 0.75rem;
+  gap: 0.5rem;
+  padding: 4rem 1.5rem;
+  border: 1px dashed #1a1a1a;
+  border-radius: 12px;
 `;
 
 const EmptyTitle = styled.p`
   margin: 0;
-  color: rgba(255,255,255,0.5);
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-family: 'Georgia', serif;
+  font-size: 1.15rem;
+  color: #c8c8c3;
 `;
 
 const EmptyHint = styled.p`
-  margin: 0 0 0.75rem;
-  color: rgba(255,255,255,0.25);
-  font-size: 0.9rem;
-  max-width: 300px;
+  margin: 0 0 1rem;
+  max-width: 320px;
+  font-size: 0.85rem;
   line-height: 1.5;
+  color: #4a4a4a;
 `;
 
-/* ── Collection Tab ── */
+/* ═══ Upload modal ═══ */
 
-const CollectionStats = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 2rem;
+const ModalOverlay = styled.div`
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(6px);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 1rem;
+  z-index: 1000;
 `;
 
-const CollectionMeta = styled.div`
+const Modal = styled.div`
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
-  margin-top: 0.6rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid rgba(255,255,255,0.06);
+  gap: 1.25rem;
+  width: 100%;
+  max-width: 420px;
+  padding: 1.5rem;
+  background: #0f0f0f;
+  border: 1px solid #1e1e1e;
+  border-radius: 14px;
+  animation: ${fadeIn} 0.2s ease-out;
 `;
 
-const CollectionPaid = styled.span`
-  color: rgba(255,255,255,0.4);
-  font-size: 0.8rem;
+const ModalHead = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const ModalTitle = styled.h3`
+  margin: 0;
+  font-family: 'Georgia', serif;
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: #f5f5f0;
+`;
+
+const CloseBtn = styled.button`
+  display: flex;
+  padding: 4px;
+  background: none;
+  border: none;
+  color: #4a4a4a;
+  cursor: pointer;
+  transition: color 0.15s;
+  &:hover { color: #e8e8e3; }
+`;
+
+const UploadZone = styled.button`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 180px;
+  background: #0a0a0a;
+  border: 1px dashed #2a2a2a;
+  border-radius: 10px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s;
+
+  &:hover { border-color: #444; }
+`;
+
+const UploadLabel = styled.span`
+  font-size: 0.9rem;
   font-weight: 500;
+  color: #c8c8c3;
 `;
 
-const CollectionGain = styled.span<{ gained: boolean }>`
-  color: ${p => p.gained ? '#4ade80' : '#f87171'};
+const UploadHint = styled.span`
+  font-size: 0.75rem;
+  color: #4a4a4a;
+`;
+
+const ModalError = styled.div`
+  color: #d98080;
+  border: 1px solid #2a1717;
+  background: #120c0c;
+  padding: 0.7rem 0.9rem;
+  border-radius: 8px;
   font-size: 0.8rem;
-  font-weight: 700;
+  line-height: 1.45;
 `;
 
-const CollectionDate = styled.span`
-  color: rgba(255,255,255,0.25);
-  font-size: 0.7rem;
-  margin-top: 0.3rem;
+const HiddenInput = styled.input`
+  display: none;
+`;
+
+const ImgPreview = styled.img`
+  width: 180px;
+  height: 180px;
+  align-self: center;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 1px solid #1e1e1e;
 `;

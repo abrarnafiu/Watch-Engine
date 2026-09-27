@@ -3,3 +3,4 @@ package-lock.json
 package.json
 .env
 /Users/abrarnafiu/Downloads/Watch-Engine/webapp/.env
+*.sql
