@@ -3,7 +3,8 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: "./", // important for static build
+  // Absolute asset paths: with "./", deep links like /watch/:id requested /watch/assets/*.js and rendered blank
+  base: "/",
   build: {
     outDir: 'dist',
   },

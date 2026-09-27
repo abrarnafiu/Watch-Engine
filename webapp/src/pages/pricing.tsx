@@ -1,54 +1,23 @@
 import styled from 'styled-components';
 import Navbar from '../components/navbar';
 import { useSubscription } from '../contexts/SubscriptionContext';
-import { API_URL } from '../config';
-import { supabase } from '../lib/supabaseClient';
+import { useState } from 'react';
+import { redirectToBilling } from '../lib/billing';
 
 export default function Pricing() {
   const { isPro } = useSubscription();
 
-  const handleUpgrade = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      window.location.href = '/login';
-      return;
-    }
+  const [pending, setPending] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
 
-    try {
-      const res = await fetch(`${API_URL}/api/create-checkout-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-      const result = await res.json();
-      if (result.success && result.data?.url) {
-        window.location.href = result.data.url;
-      }
-    } catch (err) {
-      console.error('Checkout error:', err);
-    }
-  };
-
-  const handleManage = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return;
-
-    try {
-      const res = await fetch(`${API_URL}/api/create-portal-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-      const result = await res.json();
-      if (result.success && result.data?.url) {
-        window.location.href = result.data.url;
-      }
-    } catch (err) {
-      console.error('Portal error:', err);
+  const openBilling = async (endpoint: 'create-checkout-session' | 'create-portal-session') => {
+    setPending(true);
+    setBillingError(null);
+    const error = await redirectToBilling(endpoint);
+    // On success the page is navigating away, so keep the button disabled
+    if (error) {
+      setBillingError(error);
+      setPending(false);
     }
   };
 
@@ -66,12 +35,12 @@ export default function Pricing() {
             <PlanPrice>$0<PlanPeriod>/month</PlanPeriod></PlanPrice>
             <PlanDesc>Get started with the basics</PlanDesc>
             <FeatureList>
-              <Feature included>Semantic watch search</Feature>
-              <Feature included>Similar watch recommendations</Feature>
-              <Feature included>10 searches per day</Feature>
-              <Feature included>3 price alerts</Feature>
-              <Feature included>5 collection slots</Feature>
-              <Feature included>Favorites & lists</Feature>
+              <Feature $included>Semantic watch search</Feature>
+              <Feature $included>Similar watch recommendations</Feature>
+              <Feature $included>10 searches per day</Feature>
+              <Feature $included>3 price alerts</Feature>
+              <Feature $included>5 collection slots</Feature>
+              <Feature $included>Favorites & lists</Feature>
               <Feature>Price history charts</Feature>
               <Feature>Unlimited alerts</Feature>
               <Feature>Unlimited collection</Feature>
@@ -81,28 +50,29 @@ export default function Pricing() {
           </PlanCard>
 
           {/* Pro Plan */}
-          <PlanCard highlighted>
+          <PlanCard $highlighted>
             <PopularBadge>Most Popular</PopularBadge>
             <PlanName>Pro</PlanName>
             <PlanPrice>$8<PlanPeriod>/month</PlanPeriod></PlanPrice>
             <PlanDesc>Everything you need for serious collecting</PlanDesc>
             <FeatureList>
-              <Feature included>Semantic watch search</Feature>
-              <Feature included>Similar watch recommendations</Feature>
-              <Feature included>Unlimited searches</Feature>
-              <Feature included>Unlimited price alerts</Feature>
-              <Feature included>Unlimited collection</Feature>
-              <Feature included>Favorites & lists</Feature>
-              <Feature included>Price history charts</Feature>
-              <Feature included>Price comparison across sources</Feature>
-              <Feature included>Collection value tracking</Feature>
-              <Feature included>Priority support</Feature>
+              <Feature $included>Semantic watch search</Feature>
+              <Feature $included>Similar watch recommendations</Feature>
+              <Feature $included>Unlimited searches</Feature>
+              <Feature $included>Unlimited price alerts</Feature>
+              <Feature $included>Unlimited collection</Feature>
+              <Feature $included>Favorites & lists</Feature>
+              <Feature $included>Price history charts</Feature>
+              <Feature $included>Price comparison across sources</Feature>
+              <Feature $included>Collection value tracking</Feature>
+              <Feature $included>Priority support</Feature>
             </FeatureList>
             {isPro ? (
-              <ManageBtn onClick={handleManage}>Manage Subscription</ManageBtn>
+              <ManageBtn onClick={() => openBilling('create-portal-session')} disabled={pending}>{pending ? 'Opening…' : 'Manage Subscription'}</ManageBtn>
             ) : (
-              <UpgradeBtn onClick={handleUpgrade}>Upgrade to Pro</UpgradeBtn>
+              <UpgradeBtn onClick={() => openBilling('create-checkout-session')} disabled={pending}>{pending ? 'Opening checkout…' : 'Upgrade to Pro'}</UpgradeBtn>
             )}
+            {billingError && <BillingError role="alert">{billingError}</BillingError>}
           </PlanCard>
         </PlanGrid>
       </Content>
@@ -144,8 +114,8 @@ const PlanGrid = styled.div`
   text-align: left;
   @media (max-width: 700px) { grid-template-columns: 1fr; }
 `;
-const PlanCard = styled.div<{ highlighted?: boolean }>`
-  background: ${p => p.highlighted ? '#111' : '#0a0a0a'};
+const PlanCard = styled.div<{ $highlighted?: boolean }>`
+  background: ${p => p.$highlighted ? '#111' : '#0a0a0a'};
   padding: 2.5rem;
   position: relative;
   display: flex;
@@ -194,16 +164,16 @@ const FeatureList = styled.div`
   flex: 1;
   margin-bottom: 1.5rem;
 `;
-const Feature = styled.div<{ included?: boolean }>`
+const Feature = styled.div<{ $included?: boolean }>`
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: ${p => p.included ? '#888' : '#2a2a2a'};
+  color: ${p => p.$included ? '#888' : '#2a2a2a'};
   font-size: 0.8rem;
   font-weight: 400;
   &::before {
-    content: '${p => p.included ? '\\2713' : '\\2717'}';
-    color: ${p => p.included ? '#e8e8e3' : '#222'};
+    content: '${p => p.$included ? '\\2713' : '\\2717'}';
+    color: ${p => p.$included ? '#e8e8e3' : '#222'};
     font-size: 0.75rem;
     width: 16px;
     text-align: center;
@@ -230,7 +200,7 @@ const UpgradeBtn = styled.button`
   font-family: inherit;
   cursor: pointer;
   transition: opacity 0.15s;
-  &:hover { opacity: 0.85; }
+  &:hover { opacity: 0.85; }  &:disabled { opacity: 0.5; cursor: default; }
 `;
 const ManageBtn = styled.button`
   width: 100%;
@@ -244,5 +214,12 @@ const ManageBtn = styled.button`
   font-family: inherit;
   cursor: pointer;
   transition: all 0.15s;
-  &:hover { border-color: #333; color: #ccc; }
+  &:hover { border-color: #333; color: #ccc; }  &:disabled { opacity: 0.5; cursor: default; }
+`;
+
+const BillingError = styled.p`
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: #d98080;
+  text-align: center;
 `;

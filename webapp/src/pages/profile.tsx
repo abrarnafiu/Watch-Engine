@@ -6,6 +6,7 @@ import Footer from '../components/footer';
 import styled, { keyframes } from 'styled-components';
 import type { WatchPreferences } from '../types/supabase';
 import { getImageUrl } from '../lib/imageUtils';
+import { WATCH_COLUMNS } from '../lib/watchColumns';
 
 interface Watch {
   id: string;
@@ -111,7 +112,7 @@ export default function Profile() {
         .from('watch_preferences')
         .select('*')
         .eq('user_id', user.id)
-        .single();
+        .maybeSingle(); // new users have no preferences row yet
 
       if (error) throw error;
       if (data) {
@@ -143,7 +144,7 @@ export default function Profile() {
         const watchIds = data.map((fav: Favorite) => fav.watch_id);
         const { data: watchesData, error: watchesError } = await supabase
           .from('watches')
-          .select('*')
+          .select(WATCH_COLUMNS)
           .in('id', watchIds);
 
         if (watchesError) throw watchesError;
@@ -180,7 +181,7 @@ export default function Profile() {
               const watchIds = itemsData.map((item: Favorite) => item.watch_id);
               const { data: watchesData, error: watchesError } = await supabase
                 .from('watches')
-                .select('*')
+                .select(WATCH_COLUMNS)
                 .in('id', watchIds);
 
               if (watchesError) throw watchesError;
@@ -212,7 +213,7 @@ export default function Profile() {
         const watchIds = data.map(item => item.watch_id);
         const { data: watchesData, error: watchesError } = await supabase
           .from('watches')
-          .select('*')
+          .select(WATCH_COLUMNS)
           .in('id', watchIds);
 
         if (watchesError) throw watchesError;

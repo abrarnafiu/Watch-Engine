@@ -41,10 +41,10 @@ export default function PriceComparison({ watchId }: { watchId: string }) {
       <Header>Compare Prices</Header>
       <CardRow>
         {listings.map((listing, i) => (
-          <Card key={listing.id} isLowest={i === 0}>
+          <Card key={listing.id} $isLowest={i === 0}>
             {i === 0 && <LowestBadge>Lowest</LowestBadge>}
             <SourceName>{listing.source || 'Unknown'}</SourceName>
-            <Price isLowest={i === 0}>${listing.price_eur.toLocaleString()}</Price>
+            <Price $isLowest={i === 0}>${listing.price_eur.toLocaleString()}</Price>
             {i > 0 && (
               <PriceDiff>+${(listing.price_eur - lowest).toLocaleString()} more</PriceDiff>
             )}
@@ -77,12 +77,12 @@ const CardRow = styled.div`
   overflow-x: auto;
 `;
 
-const Card = styled.div<{ isLowest: boolean }>`
+const Card = styled.div<{ $isLowest: boolean }>`
   flex: 1;
   min-width: 160px;
   padding: 1.25rem;
-  background: ${p => p.isLowest ? 'rgba(74, 222, 128, 0.08)' : 'rgba(255,255,255,0.03)'};
-  border: 1px solid ${p => p.isLowest ? 'rgba(74, 222, 128, 0.25)' : 'rgba(255,255,255,0.06)'};
+  background: ${p => p.$isLowest ? 'rgba(74, 222, 128, 0.08)' : 'rgba(255,255,255,0.03)'};
+  border: 1px solid ${p => p.$isLowest ? 'rgba(74, 222, 128, 0.25)' : 'rgba(255,255,255,0.06)'};
   border-radius: 14px;
   position: relative;
   text-align: center;
@@ -111,8 +111,8 @@ const SourceName = styled.div`
   margin-bottom: 0.5rem;
 `;
 
-const Price = styled.div<{ isLowest: boolean }>`
-  color: ${p => p.isLowest ? '#4ade80' : '#ffffff'};
+const Price = styled.div<{ $isLowest: boolean }>`
+  color: ${p => p.$isLowest ? '#4ade80' : '#ffffff'};
   font-size: 1.3rem;
   font-weight: 700;
   font-family: 'Montserrat', sans-serif;

@@ -18,22 +18,45 @@ dotenv.config({ path: path.resolve(__dirname, '../.env') });
 const app = express();
 const port = process.env.PORT || 5000;
 
+// Render terminates TLS in front of us; without this every request shares the proxy's IP,
+// so all users would share a single rate-limit bucket
+app.set('trust proxy', 1);
+
 // OpenAI client
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-// Supabase client (server-side with service role key)
+// Supabase client. The webhook and price tracker write without a user session, so they need
+// the service role key; the anon key only works if RLS lets anonymous users write those tables.
+if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  console.warn('SUPABASE_SERVICE_ROLE_KEY not set — falling back to the anon key; subscription writes may fail');
+}
 const supabase = createClient(
   process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
+  process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY
 );
 
-// Embedding cache: avoids re-embedding repeated queries
+// Caches for repeated queries: skip re-embedding and re-running the LLM extraction
 const embeddingCache = new LRUCache({ max: 500, ttl: 1000 * 60 * 60 });
+const criteriaCache = new LRUCache({ max: 500, ttl: 1000 * 60 * 60 });
 
-// Rate limiting
+// Queries go to two OpenAI calls; anything longer than this is not a real search
+const MAX_QUERY_LENGTH = 300;
+
+// Rate limiting. Images get their own generous bucket (a results page loads ~30 of them);
+// the OpenAI-backed routes get a tighter one because each call costs money.
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100
+  max: 300,
+  skip: (req) => req.path === '/api/proxy-image',
+});
+const imageLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 2000,
+});
+const llmLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { success: false, message: 'Too many searches, please wait a few minutes.' },
 });
 
 // CORS configuration
@@ -75,7 +98,7 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
         const session = event.data.object;
         const userId = session.metadata?.user_id;
         if (userId) {
-          await supabase.from('subscriptions').upsert({
+          const { error } = await supabase.from('subscriptions').upsert({
             user_id: userId,
             plan: 'pro',
             stripe_customer_id: session.customer,
@@ -83,30 +106,37 @@ app.post('/api/stripe-webhook', express.raw({ type: 'application/json' }), async
             status: 'active',
             updated_at: new Date().toISOString(),
           }, { onConflict: 'user_id' });
+          if (error) throw error;
         }
         break;
       }
       case 'customer.subscription.updated': {
         const sub = event.data.object;
-        await supabase.from('subscriptions')
+        // Newer Stripe API versions moved current_period_end onto the subscription items
+        const periodEnd = sub.current_period_end ?? sub.items?.data?.[0]?.current_period_end;
+        const { error } = await supabase.from('subscriptions')
           .update({
             status: sub.status,
-            current_period_end: new Date(sub.current_period_end * 1000).toISOString(),
+            ...(periodEnd && { current_period_end: new Date(periodEnd * 1000).toISOString() }),
             updated_at: new Date().toISOString(),
           })
           .eq('stripe_subscription_id', sub.id);
+        if (error) throw error;
         break;
       }
       case 'customer.subscription.deleted': {
         const sub = event.data.object;
-        await supabase.from('subscriptions')
+        const { error } = await supabase.from('subscriptions')
           .update({ plan: 'free', status: 'canceled', updated_at: new Date().toISOString() })
           .eq('stripe_subscription_id', sub.id);
+        if (error) throw error;
         break;
       }
     }
   } catch (err) {
     console.error('Webhook handler error:', err);
+    // Non-2xx makes Stripe retry, so a transient failure doesn't lose the event
+    return res.status(500).json({ received: false });
   }
 
   res.json({ received: true });
@@ -147,6 +177,10 @@ async function generateEmbedding(text) {
 }
 
 async function extractCategories(query) {
+  const cacheKey = query.trim().toLowerCase();
+  const cached = criteriaCache.get(cacheKey);
+  if (cached) return cached;
+
   const response = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     messages: [
@@ -171,13 +205,21 @@ async function extractCategories(query) {
   });
 
   try {
-    return JSON.parse(response.choices[0].message.content);
+    const criteria = JSON.parse(response.choices[0].message.content);
+    criteriaCache.set(cacheKey, criteria);
+    return criteria;
   } catch {
     return {};
   }
 }
 
 // --- Search functions ---
+
+// LLM output is untrusted: "5k" or "" would become NaN and make PostgREST reject the query
+function toPrice(value) {
+  const n = Number(value);
+  return value !== undefined && value !== null && value !== '' && Number.isFinite(n) ? n : null;
+}
 
 function buildSupabaseFilters(criteria) {
   const filters = [];
@@ -203,11 +245,13 @@ function buildSupabaseFilters(criteria) {
   if (criteria.Limited_Edition) {
     filters.push({ column: 'limited_edition', op: 'neq', value: null });
   }
-  if (criteria.Price_Min) {
-    filters.push({ column: 'price_eur', op: 'gte', value: Number(criteria.Price_Min) });
+  const priceMin = toPrice(criteria.Price_Min);
+  const priceMax = toPrice(criteria.Price_Max);
+  if (priceMin !== null) {
+    filters.push({ column: 'price_eur', op: 'gte', value: priceMin });
   }
-  if (criteria.Price_Max) {
-    filters.push({ column: 'price_eur', op: 'lte', value: Number(criteria.Price_Max) });
+  if (priceMax !== null) {
+    filters.push({ column: 'price_eur', op: 'lte', value: priceMax });
   }
 
   return filters;
@@ -238,7 +282,7 @@ async function runFullTextSearch(query) {
 
 // 3. SQL filter search (hard constraints from LLM extraction)
 async function runFilteredSearch(filters) {
-  let query = supabase.from('watches').select('id, reference, brand_id, model_name, family_name, movement_name, function_name, year_produced, limited_edition, price_eur, image_url, image_filename, description, dial_color, source, raw_data, created_at, last_updated');
+  let query = supabase.from('watches').select('id, reference, brand_id, model_name, family_name, movement_name, function_name, year_produced, limited_edition, price_eur, image_url, image_filename, description, dial_color, source, created_at, last_updated');
 
   for (const f of filters) {
     if (f.op === 'ilike') query = query.ilike(f.column, f.value);
@@ -297,11 +341,15 @@ function reciprocalRankFusion(rankedLists, k = 60) {
 // --- API Endpoints ---
 
 // Legacy analyze-query endpoint
-app.post('/api/analyze-query', async (req, res) => {
+app.post('/api/analyze-query', llmLimiter, async (req, res) => {
   try {
     const { query } = req.body;
     if (!query || typeof query !== 'string') {
       return errorResponse(res, 400, 'Invalid query parameter');
+    }
+
+    if (query.length > MAX_QUERY_LENGTH) {
+      return errorResponse(res, 400, 'Query is too long');
     }
 
     const criteria = await extractCategories(query);
@@ -313,40 +361,52 @@ app.post('/api/analyze-query', async (req, res) => {
 });
 
 // Hybrid search: vector + full-text + filters, fused with RRF
-app.post('/api/hybrid-search', async (req, res) => {
+app.post('/api/hybrid-search', llmLimiter, async (req, res) => {
   try {
     const { query } = req.body;
     if (!query || typeof query !== 'string') {
       return errorResponse(res, 400, 'Invalid query parameter');
     }
 
+    if (query.length > MAX_QUERY_LENGTH) {
+      return errorResponse(res, 400, 'Query is too long');
+    }
+
     console.log('Hybrid search for:', query);
     const startTime = Date.now();
 
-    // Step 1: Run embedding + category extraction + full-text search in parallel
-    const [embedding, criteria, fullTextResults] = await Promise.all([
-      generateEmbedding(query),
-      extractCategories(query),
+    // Each branch starts as soon as its own input is ready (vector search only waits on the
+    // embedding, not on the slower LLM call), and one failing branch doesn't sink the search.
+    const criteriaPromise = extractCategories(query).catch(err => {
+      console.error('Category extraction failed:', err.message);
+      return {};
+    });
+    const [vectorSettled, fullTextSettled, filterSettled, criteriaSettled] = await Promise.allSettled([
+      generateEmbedding(query).then(runVectorSearch),
       runFullTextSearch(query),
+      criteriaPromise.then(criteria => {
+        const filters = buildSupabaseFilters(criteria);
+        return filters.length > 0 ? runFilteredSearch(filters) : [];
+      }),
+      criteriaPromise,
     ]);
 
-    console.log('Extracted criteria:', criteria);
-    console.log(`Full-text results: ${fullTextResults.length}`);
-
-    // Step 2: Run vector search + filtered search in parallel
-    const filters = buildSupabaseFilters(criteria);
-    const hasFilters = filters.length > 0;
-
-    const searchPromises = [runVectorSearch(embedding)];
-    if (hasFilters) {
-      searchPromises.push(runFilteredSearch(filters));
+    const branches = { vector: vectorSettled, fullText: fullTextSettled, filter: filterSettled };
+    for (const [name, result] of Object.entries(branches)) {
+      if (result.status === 'rejected') console.error(`${name} search failed:`, result.reason?.message || result.reason);
+    }
+    if (Object.values(branches).every(r => r.status === 'rejected')) {
+      throw vectorSettled.reason;
     }
 
-    const results = await Promise.all(searchPromises);
-    const vectorResults = results[0];
-    const filterResults = hasFilters ? results[1] : [];
+    const valueOf = (result) => (result.status === 'fulfilled' ? result.value : []);
+    const vectorResults = valueOf(vectorSettled);
+    const fullTextResults = valueOf(fullTextSettled);
+    const filterResults = valueOf(filterSettled);
+    const criteria = criteriaSettled.value;
 
-    console.log(`Vector results: ${vectorResults.length}, Filter results: ${filterResults.length}`);
+    console.log('Extracted criteria:', criteria);
+    console.log(`Vector: ${vectorResults.length}, full-text: ${fullTextResults.length}, filter: ${filterResults.length}`);
 
     // Step 3: Fuse all result sets with Reciprocal Rank Fusion
     const rankedLists = [vectorResults, fullTextResults];
@@ -358,11 +418,13 @@ app.post('/api/hybrid-search', async (req, res) => {
 
     // Apply hard price filters as post-filters (these are constraints, not ranking signals)
     let finalResults = fused;
-    if (criteria.Price_Min || criteria.Price_Max) {
+    const priceMin = toPrice(criteria.Price_Min);
+    const priceMax = toPrice(criteria.Price_Max);
+    if (priceMin !== null || priceMax !== null) {
       finalResults = fused.filter(w => {
         if (!w.price_eur) return true; // keep watches without price data
-        if (criteria.Price_Min && w.price_eur < Number(criteria.Price_Min)) return false;
-        if (criteria.Price_Max && w.price_eur > Number(criteria.Price_Max)) return false;
+        if (priceMin !== null && w.price_eur < priceMin) return false;
+        if (priceMax !== null && w.price_eur > priceMax) return false;
         return true;
       });
     }
@@ -370,7 +432,9 @@ app.post('/api/hybrid-search', async (req, res) => {
     const elapsed = Date.now() - startTime;
     console.log(`Hybrid search completed in ${elapsed}ms — ${finalResults.length} results`);
 
-    return successResponse(res, finalResults.slice(0, 30));
+    // The full-text RPC returns raw_data (the whole scraped record); the client never uses it
+    const payload = finalResults.slice(0, 30).map(({ raw_data, embedding, ...watch }) => watch);
+    return successResponse(res, payload);
   } catch (error) {
     console.error('Hybrid search error:', error);
     return errorResponse(res, 500, 'Search failed', error);
@@ -460,43 +524,51 @@ app.get('/api/price-history/:watchId', async (req, res) => {
 });
 
 // Image proxy endpoint
-app.get('/api/proxy-image', async (req, res) => {
+app.get('/api/proxy-image', imageLimiter, async (req, res) => {
   const imageUrl = req.query.url;
 
   if (!imageUrl) {
     return res.status(400).json({ error: 'Image URL is required' });
   }
 
+  let url;
   try {
-    const url = new URL(imageUrl);
-    if (!url.hostname.includes('makingdatameaningful.com')) {
-      return res.status(400).json({ error: 'Invalid image source' });
+    url = new URL(imageUrl);
+  } catch {
+    return res.status(400).json({ error: 'Invalid image URL' });
+  }
+
+  // Exact host match: includes() would also accept makingdatameaningful.com.attacker.example
+  const host = url.hostname;
+  if (host !== 'makingdatameaningful.com' && !host.endsWith('.makingdatameaningful.com')) {
+    return res.status(400).json({ error: 'Invalid image source' });
+  }
+
+  // The upstream serves plain http (its TLS certificate is broken)
+  const request = http.get(`http://${host}${url.pathname}${url.search}`, (response) => {
+    const contentType = response.headers['content-type'] || '';
+    if (response.statusCode !== 200 || !contentType.startsWith('image/')) {
+      response.resume(); // drain so the socket is released
+      if (!res.headersSent) res.status(502).json({ error: 'Failed to fetch image' });
+      return;
     }
 
-    const proxyUrl = `http://${url.hostname}${url.pathname}${url.search}`;
+    res.set('Content-Type', contentType);
+    res.set('Cache-Control', 'public, max-age=86400');
+    response.pipe(res);
+  });
 
-    const request = http.get(proxyUrl, (response) => {
-      if (response.statusCode !== 200) {
-        return res.status(response.statusCode).json({ error: 'Failed to fetch image' });
-      }
+  request.setTimeout(10000, () => request.destroy(new Error('Upstream image request timed out')));
 
-      res.set('Content-Type', response.headers['content-type']);
-      res.set('Cache-Control', 'public, max-age=86400');
-      response.pipe(res);
-    });
+  request.on('error', (error) => {
+    console.error('Error proxying image:', error.message);
+    // Once streaming has started we can't send a JSON error anymore
+    if (!res.headersSent) res.status(502).json({ error: 'Failed to fetch image' });
+    else res.destroy();
+  });
 
-    request.on('error', (error) => {
-      console.error('Error proxying image:', error);
-      res.status(500).json({ error: 'Failed to fetch image' });
-    });
-
-    req.on('close', () => {
-      request.destroy();
-    });
-  } catch (error) {
-    console.error('Error in image proxy:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
+  // Client went away: stop fetching (req 'close' fires when the request body is consumed, not on disconnect)
+  res.on('close', () => request.destroy());
 });
 
 // --- Monetization Endpoints ---

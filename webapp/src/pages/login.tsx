@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import Navbar from '../components/navbar';
 import styled from 'styled-components';
 import { supabase } from '../lib/supabaseClient';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -12,6 +12,10 @@ export default function Login() {
   const [mode, setMode] = useState<'login' | 'signup'>('login');
   const [googleLoading, setGoogleLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Where ProtectedRoute sent us from; only same-site paths
+  const from = (location.state as { from?: string } | null)?.from;
+  const returnTo = from && from.startsWith('/') && !from.startsWith('//') ? from : '/';
   const [searchParams] = useSearchParams();
 
   useEffect(() => {
@@ -75,7 +79,7 @@ export default function Login() {
           password,
         });
         if (error) throw error;
-        navigate('/');
+        navigate(returnTo, { replace: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');

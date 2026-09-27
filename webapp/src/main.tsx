@@ -1,16 +1,20 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import Home from './pages/index'
-import About from './pages/about'
-import Brands from './pages/brands'
-import Login from './pages/login'
-import BrandPage from './pages/brandPage'
-import WatchDetails from './pages/watchDetails'
-import Profile from './pages/profile'
-import ProfileSetup from './pages/profile-setup'
-import Alerts from './pages/alerts'
-import Pricing from './pages/pricing'
+
+// Every page except the landing search is split into its own chunk,
+// so recharts etc. only download when a page that needs them is opened
+const About = lazy(() => import('./pages/about'))
+const Brands = lazy(() => import('./pages/brands'))
+const Login = lazy(() => import('./pages/login'))
+const BrandPage = lazy(() => import('./pages/brandPage'))
+const WatchDetails = lazy(() => import('./pages/watchDetails'))
+const Profile = lazy(() => import('./pages/profile'))
+const ProfileSetup = lazy(() => import('./pages/profile-setup'))
+const Alerts = lazy(() => import('./pages/alerts'))
+const Pricing = lazy(() => import('./pages/pricing'))
+const NotFound = lazy(() => import('./pages/notFound'))
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
 import { SubscriptionProvider } from './contexts/SubscriptionContext'
@@ -21,6 +25,7 @@ createRoot(document.getElementById('root')!).render(
     <AuthProvider>
       <SubscriptionProvider>
         <BrowserRouter>
+          <Suspense fallback={<div style={{ minHeight: '100vh', background: '#0a0a0a' }} />}>
           <Routes>
             <Route path='/' element={<Home />} />
             <Route path="/about" element={<About />} />
@@ -53,7 +58,9 @@ createRoot(document.getElementById('root')!).render(
                 </ProtectedRoute>
               }
             />
+            <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
         </BrowserRouter>
       </SubscriptionProvider>
     </AuthProvider>

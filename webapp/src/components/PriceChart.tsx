@@ -58,7 +58,7 @@ export default function PriceChart({ watchId }: { watchId: string }) {
         <Title>Price History</Title>
         <TimeButtons>
           {[30, 90, 180, 365].map(d => (
-            <TimeBtn key={d} active={days === d} onClick={() => setDays(d)}>
+            <TimeBtn key={d} $active={days === d} onClick={() => setDays(d)}>
               {d < 365 ? `${d}d` : '1y'}
             </TimeBtn>
           ))}
@@ -147,10 +147,10 @@ const TimeButtons = styled.div`
   padding: 0.2rem;
 `;
 
-const TimeBtn = styled.button<{ active: boolean }>`
+const TimeBtn = styled.button<{ $active: boolean }>`
   padding: 0.35rem 0.75rem;
-  background: ${p => p.active ? 'rgba(255,255,255,0.1)' : 'transparent'};
-  color: ${p => p.active ? '#fff' : 'rgba(255,255,255,0.4)'};
+  background: ${p => p.$active ? 'rgba(255,255,255,0.1)' : 'transparent'};
+  color: ${p => p.$active ? '#fff' : 'rgba(255,255,255,0.4)'};
   border: none;
   border-radius: 6px;
   font-size: 0.75rem;

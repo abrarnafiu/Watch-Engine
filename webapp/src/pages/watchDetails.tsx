@@ -4,6 +4,7 @@ import Navbar from "../components/navbar";
 import styled from "styled-components";
 import { supabase } from "../lib/supabaseClient";
 import { getImageUrl } from "../lib/imageUtils";
+import { WATCH_COLUMNS } from '../lib/watchColumns';
 import { API_URL } from "../config";
 import PriceComparison from "../components/PriceComparison";
 import PriceChart from "../components/PriceChart";
@@ -72,7 +73,7 @@ const WatchDetails: React.FC = () => {
 
         const { data, error } = await supabase
           .from("watches")
-          .select("*")
+          .select(WATCH_COLUMNS)
           .eq("id", id)
           .maybeSingle();
 

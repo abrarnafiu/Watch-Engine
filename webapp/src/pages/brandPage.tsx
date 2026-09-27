@@ -4,6 +4,7 @@ import Navbar from "../components/navbar";
 import styled from "styled-components";
 import { supabase } from "../lib/supabaseClient";
 import { getImageUrl } from "../lib/imageUtils";
+import { WATCH_COLUMNS } from '../lib/watchColumns';
 
 interface Watch {
   id: string;
@@ -63,7 +64,7 @@ const BrandPage: React.FC = () => {
         // Fetch watches based on the brand_id
         const { data, error: watchError, count } = await supabase
           .from("watches")
-          .select("*", { count: "exact" })
+          .select(WATCH_COLUMNS, { count: "exact" })
           .eq("brand_id", id)
           .range(from, to);
 

@@ -1,29 +1,18 @@
 import styled from 'styled-components';
-import { API_URL } from '../config';
-import { supabase } from '../lib/supabaseClient';
+import { useState } from 'react';
+import { redirectToBilling } from '../lib/billing';
 
 export default function UpgradePrompt({ feature }: { feature: string }) {
-  const handleUpgrade = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) {
-      window.location.href = '/login';
-      return;
-    }
+  const [pending, setPending] = useState(false);
+  const [billingError, setBillingError] = useState<string | null>(null);
 
-    try {
-      const res = await fetch(`${API_URL}/api/create-checkout-session`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
-      });
-      const result = await res.json();
-      if (result.success && result.data?.url) {
-        window.location.href = result.data.url;
-      }
-    } catch (err) {
-      console.error('Checkout error:', err);
+  const handleUpgrade = async () => {
+    setPending(true);
+    setBillingError(null);
+    const error = await redirectToBilling('create-checkout-session');
+    if (error) {
+      setBillingError(error);
+      setPending(false);
     }
   };
 
@@ -36,7 +25,8 @@ export default function UpgradePrompt({ feature }: { feature: string }) {
       </Icon>
       <Title>Upgrade to Pro</Title>
       <Desc>You've reached the free limit for {feature}. Upgrade to Pro for unlimited access.</Desc>
-      <UpgradeBtn onClick={handleUpgrade}>Upgrade — $8/mo</UpgradeBtn>
+      <UpgradeBtn onClick={handleUpgrade} disabled={pending}>{pending ? 'Opening checkout…' : 'Upgrade — $8/mo'}</UpgradeBtn>
+      {billingError && <BillingError role="alert">{billingError}</BillingError>}
     </Container>
   );
 }
@@ -90,5 +80,12 @@ const UpgradeBtn = styled.button`
   &:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 25px rgba(99, 102, 241, 0.5);
-  }
+  }  &:disabled { opacity: 0.5; cursor: default; }
+`;
+
+const BillingError = styled.p`
+  margin: 0.75rem 0 0;
+  font-size: 0.8rem;
+  color: #d98080;
+  text-align: center;
 `;

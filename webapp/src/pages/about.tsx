@@ -33,7 +33,7 @@ export default function About() {
 
       <h2>Contact Us</h2>
       <p>
-        If you have any questions or feedback, feel free to reach out to us at <a href="watch.engine.customer@gmail.com">watch.engine.customer@gmail.com</a>.
+        If you have any questions or feedback, feel free to reach out to us at <a href="mailto:watch.engine.customer@gmail.com">watch.engine.customer@gmail.com</a>.
       </p>
     </section>
 

@@ -100,7 +100,7 @@ export default function Alerts() {
         ) : (
           <AlertList>
             {alerts.map(alert => (
-              <AlertCard key={alert.id} inactive={!alert.is_active}>
+              <AlertCard key={alert.id} $inactive={!alert.is_active}>
                 <AlertImage
                   src={alert.watch ? getImageUrl(alert.watch.image_url) : '/placeholder.jpg'}
                   alt={alert.watch?.model_name || ''}
@@ -116,7 +116,7 @@ export default function Alerts() {
                       Target: <PriceValue>${alert.target_price.toLocaleString()}</PriceValue>
                     </PriceLabel>
                     <PriceLabel>
-                      Current: <PriceValue current>
+                      Current: <PriceValue $current>
                         {alert.watch?.price_eur ? `$${alert.watch.price_eur.toLocaleString()}` : 'N/A'}
                       </PriceValue>
                     </PriceLabel>
@@ -126,7 +126,7 @@ export default function Alerts() {
                   </AlertPrices>
                 </AlertInfo>
                 <AlertControls>
-                  <ToggleBtn active={alert.is_active} onClick={() => toggleAlert(alert.id, alert.is_active)}>
+                  <ToggleBtn $active={alert.is_active} onClick={() => toggleAlert(alert.id, alert.is_active)}>
                     {alert.is_active ? 'Active' : 'Paused'}
                   </ToggleBtn>
                   <DeleteBtn onClick={() => deleteAlert(alert.id)}>
@@ -237,7 +237,7 @@ const AlertList = styled.div`
   gap: 1rem;
 `;
 
-const AlertCard = styled.div<{ inactive: boolean }>`
+const AlertCard = styled.div<{ $inactive: boolean }>`
   display: flex;
   align-items: center;
   gap: 1.25rem;
@@ -245,7 +245,7 @@ const AlertCard = styled.div<{ inactive: boolean }>`
   background: rgba(255,255,255,0.03);
   border: 1px solid rgba(255,255,255,0.06);
   border-radius: 16px;
-  opacity: ${p => p.inactive ? 0.5 : 1};
+  opacity: ${p => p.$inactive ? 0.5 : 1};
   transition: all 0.2s;
 
   &:hover {
@@ -296,8 +296,8 @@ const PriceLabel = styled.span`
   font-size: 0.8rem;
 `;
 
-const PriceValue = styled.span<{ current?: boolean }>`
-  color: ${p => p.current ? '#4ade80' : '#a5b4fc'};
+const PriceValue = styled.span<{ $current?: boolean }>`
+  color: ${p => p.$current ? '#4ade80' : '#a5b4fc'};
   font-weight: 700;
 `;
 
@@ -317,11 +317,11 @@ const AlertControls = styled.div`
   flex-shrink: 0;
 `;
 
-const ToggleBtn = styled.button<{ active: boolean }>`
+const ToggleBtn = styled.button<{ $active: boolean }>`
   padding: 0.4rem 0.8rem;
-  background: ${p => p.active ? 'rgba(74, 222, 128, 0.1)' : 'rgba(255,255,255,0.05)'};
-  color: ${p => p.active ? '#4ade80' : 'rgba(255,255,255,0.35)'};
-  border: 1px solid ${p => p.active ? 'rgba(74, 222, 128, 0.25)' : 'rgba(255,255,255,0.08)'};
+  background: ${p => p.$active ? 'rgba(74, 222, 128, 0.1)' : 'rgba(255,255,255,0.05)'};
+  color: ${p => p.$active ? '#4ade80' : 'rgba(255,255,255,0.35)'};
+  border: 1px solid ${p => p.$active ? 'rgba(74, 222, 128, 0.25)' : 'rgba(255,255,255,0.08)'};
   border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 600;

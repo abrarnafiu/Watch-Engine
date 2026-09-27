@@ -71,7 +71,7 @@ export default function Home() {
     <Page>
       <Navbar />
 
-      <Hero shrink={hasSearched}>
+      <Hero $shrink={hasSearched}>
         <HeroInner>
           <Headline>
             The watch you're
@@ -176,11 +176,11 @@ const Page = styled.div`
   -webkit-font-smoothing: antialiased;
 `;
 
-const Hero = styled.section<{ shrink: boolean }>`
+const Hero = styled.section<{ $shrink: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: ${p => p.shrink ? '30vh' : '75vh'};
+  min-height: ${p => p.$shrink ? '30vh' : '75vh'};
   padding: 2rem;
   transition: min-height 0.5s ease;
 `;
